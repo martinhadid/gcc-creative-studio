@@ -29,7 +29,7 @@ from typing import (
 from pydantic import BaseModel, Field, field_validator
 
 from src.common.base_dto import BaseDto
-from src.common.base_repository import BaseDocument
+from src.common.base_repository import BaseDocument, BaseStringDocument
 from src.database import Base
 from sqlalchemy import JSON, Integer, String, func, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
@@ -344,7 +344,7 @@ class WorkflowBase(BaseModel):
     steps: List[WorkflowStep]
 
 
-class WorkflowModel(BaseDocument, WorkflowBase):
+class WorkflowModel(BaseStringDocument, WorkflowBase):
     """
     The editable workflow *definition* (template).
     This is what the user edits in the UI.
@@ -362,7 +362,7 @@ class WorkflowExecuteDto(BaseModel):
     args: dict[str, Any]
 
 
-class WorkflowRunModel(BaseDocument):
+class WorkflowRunModel(BaseStringDocument):
     """
     A record of a single, immutable workflow *execution*.
     This is the "history" item.

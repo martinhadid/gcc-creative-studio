@@ -24,11 +24,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Define generic types for SQLAlchemy Model and Pydantic Schema
 ModelType = TypeVar("ModelType", bound=Any)
 SchemaType = TypeVar("SchemaType", bound=BaseModel)
+IDType = TypeVar("IDType", bound=Union[int, str])
 
 
-class BaseDocument(BaseModel):
-    # ID can be int (auto-increment) or str (uuid)
-    id: Optional[Union[int, str]] = None
+class BaseDocumentMixin(BaseModel, Generic[IDType]):
+    """
+    Base Pydantic model for all schemas.
+    Now generic over IDType to enforce strict int or str IDs.
+    """
+    id: IDType
     created_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
@@ -44,6 +48,16 @@ class BaseDocument(BaseModel):
         from_attributes=True,
         alias_generator=to_camel,
     )
+
+
+# Backward compatibility: BaseDocument defaults to int IDs
+class BaseDocument(BaseDocumentMixin[int]):
+    pass
+
+
+# New base class for models that require String IDs (e.g. UUIDs)
+class BaseStringDocument(BaseDocumentMixin[str]):
+    pass
 
 
 class BaseRepository(Generic[ModelType, SchemaType]):
