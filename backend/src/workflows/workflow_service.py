@@ -155,6 +155,8 @@ class WorkflowService:
         workflow.execution_history_level = (
             workflows_v1.ExecutionHistoryLevel.EXECUTION_HISTORY_DETAILED
         )
+        if config_service.BACKEND_SERVICE_ACCOUNT_EMAIL:
+            workflow.service_account = config_service.BACKEND_SERVICE_ACCOUNT_EMAIL
 
         request = workflows_v1.CreateWorkflowRequest(
             parent=f"projects/{PROJECT_ID}/locations/{LOCATION}",
@@ -175,6 +177,8 @@ class WorkflowService:
         workflow.execution_history_level = (
             workflows_v1.ExecutionHistoryLevel.EXECUTION_HISTORY_DETAILED
         )
+        if config_service.BACKEND_SERVICE_ACCOUNT_EMAIL:
+            workflow.service_account = config_service.BACKEND_SERVICE_ACCOUNT_EMAIL
 
         request = workflows_v1.UpdateWorkflowRequest(
             workflow=workflow,

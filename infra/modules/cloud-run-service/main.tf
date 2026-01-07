@@ -81,6 +81,11 @@ resource "google_cloud_run_v2_service" "this" {
         }
       }
 
+      env {
+        name  = "BACKEND_SERVICE_ACCOUNT_EMAIL"
+        value = google_service_account.run_sa.email
+      }
+
       # non secret env vars
       dynamic "env" {
         for_each = var.container_env_vars
@@ -213,4 +218,10 @@ resource "google_project_iam_member" "workflows_invoker" {
   project = var.gcp_project_id
   role    = "roles/workflows.invoker"
   member  = "serviceAccount:${google_service_account.run_sa.email}"
+}
+
+resource "google_service_account_iam_member" "run_sa_act_as_self" {
+  service_account_id = google_service_account.run_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.run_sa.email}"
 }

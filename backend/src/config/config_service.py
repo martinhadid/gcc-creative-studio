@@ -100,6 +100,7 @@ class ConfigService(BaseSettings):
     WORKFLOWS_EXECUTOR_URL: str = (
         "http://localhost:8080"  # This service could be deployed alone in the future
     )
+    BACKEND_SERVICE_ACCOUNT_EMAIL: str = ""
 
     @model_validator(mode="before")
     @classmethod
