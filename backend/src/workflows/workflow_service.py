@@ -88,10 +88,9 @@ class WorkflowService:
                 config.model_dump() if isinstance(config, BaseModel) else config
             )
 
-
             # Resolve inputs
             resolved_inputs = {}
-            
+
             def resolve_value(value):
                 # If it's a StepOutputReference (dict with step and output)
                 if isinstance(value, dict) and "step" in value and "output" in value:
@@ -111,7 +110,6 @@ class WorkflowService:
 
             for input_name, input_value in step.inputs.model_dump().items():
                 resolved_inputs[input_name] = resolve_value(input_value)
-
 
             body = {
                 "workspace_id": "${args.workspace_id}",  # Dynamically injected from workspaceId passed at execution
@@ -187,7 +185,7 @@ class WorkflowService:
         operation = client.update_workflow(request=request)
         response = operation.result()
         return response
-    
+
     def _delete_gcp_workflow(self, workflow_id: str):
         client = workflows_v1.WorkflowsClient()
 
@@ -216,7 +214,7 @@ class WorkflowService:
         try:
             # 1. Generate the ID manually
             workflow_id = f"id-{uuid.uuid4()}"
-            
+
             # 2. Create the workflow in the database
             workflow_model = WorkflowModel(
                 id=workflow_id,
@@ -226,12 +224,12 @@ class WorkflowService:
                 steps=workflow_dto.steps,
             )
             created_workflow = await self.workflow_repository.create(workflow_model)
-            
+
             # 3. Generate GCP Workflow YAML (using the same ID)
             yaml_output = self._generate_workflow_yaml(created_workflow)
             logger.info("Generated YAML:")
             logger.info(yaml_output)
-            
+
             # 4. Create GCP Workflow
             try:
                 self._create_gcp_workflow(yaml_output, workflow_id)
@@ -240,7 +238,7 @@ class WorkflowService:
                 logger.error(f"Failed to create GCP workflow: {e}. Rolling back DB.")
                 await self.workflow_repository.delete(created_workflow.id)
                 raise e
-                
+
             return created_workflow
         except ValidationError as e:
             raise ValueError(str(e))
@@ -267,7 +265,7 @@ class WorkflowService:
 
     async def update_workflow(
         self, workflow_id: str, workflow_dto: WorkflowCreateDto, user: UserModel
-    ) -> WorkflowModel:
+    ) -> WorkflowModel | None:
         """Validates and updates a workflow."""
         try:
             # Create the full model from the DTO, preserving the existing ID and user.
@@ -282,7 +280,7 @@ class WorkflowService:
             yaml_output = self._generate_workflow_yaml(updated_model)
             logger.info("Generated YAML for update:")
             logger.info(yaml_output)
-            
+
             # The GCP workflow ID matches the DB ID (which is already in the format id-UUID)
             self._update_gcp_workflow(yaml_output, workflow_id)
 
@@ -322,15 +320,19 @@ class WorkflowService:
         execution_id = response.name.split('/')[-1]
         return execution_id
 
-    async def get_execution_details(self, workflow_id: str, execution_id: str) -> dict:
+    async def get_execution_details(
+        self, workflow_id: str, execution_id: str
+    ) -> dict | None:
         """Retrieves the details of a workflow execution."""
         client = executions_v1.ExecutionsClient()
-        
+
         if not execution_id.startswith("projects/"):
-             parent = client.workflow_path(
-                config_service.PROJECT_ID, config_service.WORKFLOWS_LOCATION, workflow_id
+            parent = client.workflow_path(
+                config_service.PROJECT_ID,
+                config_service.WORKFLOWS_LOCATION,
+                workflow_id,
             )
-             execution_name = f"{parent}/executions/{execution_id}"
+            execution_name = f"{parent}/executions/{execution_id}"
         else:
             execution_name = execution_id
 
@@ -343,7 +345,7 @@ class WorkflowService:
         user_inputs = json.loads(execution.argument) if execution.argument else {}
         if execution.state == executions_v1.Execution.State.SUCCEEDED:
             result = execution.result
-        
+
         # Fetch step entries using REST API
         try:
             credentials, project = google.auth.default(
@@ -364,9 +366,9 @@ class WorkflowService:
         # Calculate duration
         duration = 0.0
         if execution.start_time:
-            start_timestamp = execution.start_time.timestamp()
+            start_timestamp = execution.start_time.timestamp()  # type: ignore
             if execution.end_time:
-                end_timestamp = execution.end_time.timestamp()
+                end_timestamp = execution.end_time.timestamp()  # type: ignore
                 duration = end_timestamp - start_timestamp
             else:
                 import time
@@ -394,14 +396,20 @@ class WorkflowService:
         # 1. Add User Input Step Entry (Virtual)
         # This ensures the User Input step appears in the history and its outputs are available for resolution
         previous_outputs[user_input_step_id] = user_inputs
-        formatted_step_entries.append({
-            "step_id": user_input_step_id,
-            "state": "STATE_SUCCEEDED", # User input is always considered succeeded if execution started
-            "step_inputs": {},
-            "step_outputs": user_inputs,
-            "start_time": execution.start_time.isoformat() if execution.start_time else None,
-            "end_time": execution.start_time.isoformat() if execution.start_time else None, # Instant
-        })
+        formatted_step_entries.append(
+            {
+                "step_id": user_input_step_id,
+                "state": "STATE_SUCCEEDED",  # User input is always considered succeeded if execution started
+                "step_inputs": {},
+                "step_outputs": user_inputs,
+                "start_time": execution.start_time.isoformat() if execution.start_time else None,  # type: ignore
+                "end_time": (
+                    execution.start_time.isoformat()  # type: ignore
+                    if execution.start_time
+                    else None
+                ),  # Instant # type: ignore
+            }
+        )
 
         def resolve_value(value):
             if isinstance(value, StepOutputReference):
@@ -415,14 +423,14 @@ class WorkflowService:
             step_id = entry.get("step")
             if step_id == "end":
                 continue
-            
+
             # Find the step definition
             current_step = next((step for step in workflow_model.steps if step.step_id == step_id), None)
             if not current_step:
                 continue
 
             step_state = entry.get("state")
-            
+
             # Extract inputs from step
             step_inputs = {}
             for inp_name, inp_value in current_step.inputs:
@@ -433,10 +441,10 @@ class WorkflowService:
             variables = variable_data.get("variables", {})
             step_results = variables.get(f"{step_id}_result", {})
             step_outputs = step_results.get("body", {})
-            
+
             # Store outputs for subsequent steps
             previous_outputs[step_id] = step_outputs
-            
+
             formatted_step_entries.append({
                 "step_id": step_id,
                 "state": step_state,
@@ -456,7 +464,11 @@ class WorkflowService:
         }
 
     def list_executions(
-        self, workflow_id: str, limit: int = 10, page_token: str = None, filter_str: str = None
+        self,
+        workflow_id: str,
+        limit: int = 10,
+        page_token: str | None = None,
+        filter_str: str | None = None,
     ):
         """Lists executions for a given workflow."""
         client = executions_v1.ExecutionsClient()
@@ -471,7 +483,7 @@ class WorkflowService:
 
         response = client.list_executions(request=request)
         pages_iterator = response.pages
-        
+
         try:
             current_page = next(pages_iterator)
         except StopIteration:
@@ -483,9 +495,9 @@ class WorkflowService:
             # Calculate duration
             duration = 0.0
             if execution.start_time:
-                start_timestamp = execution.start_time.timestamp()
+                start_timestamp = execution.start_time.timestamp()  # type: ignore
                 if execution.end_time:
-                    end_timestamp = execution.end_time.timestamp()
+                    end_timestamp = execution.end_time.timestamp()  # type: ignore
                     duration = end_timestamp - start_timestamp
                 else:
                     import time

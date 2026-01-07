@@ -94,7 +94,7 @@ class BaseRepositoryMixin(Generic[ModelType, SchemaType, IDType]):
         # We exclude 'id' if it's None so the DB can auto-increment it (for Int IDs)
         if data.get("id") is None:
             data.pop("id", None)
-            
+
         db_item = self.model(**data)
         self.db.add(db_item)
         await self.db.commit()
@@ -123,7 +123,7 @@ class BaseRepositoryMixin(Generic[ModelType, SchemaType, IDType]):
         for key, value in data.items():
             if hasattr(db_item, key):
                 setattr(db_item, key, value)
-        
+
         # Update timestamp
         if hasattr(db_item, "updated_at"):
             db_item.updated_at = datetime.datetime.now(datetime.timezone.utc)
@@ -142,7 +142,7 @@ class BaseRepositoryMixin(Generic[ModelType, SchemaType, IDType]):
             delete(self.model).where(self.model.id == item_id)
         )
         await self.db.commit()
-        return result.rowcount > 0
+        return result.rowcount > 0 # type: ignore
 
     async def find_all(self, limit: int = 100, offset: int = 0) -> List[SchemaType]:
         """

@@ -45,17 +45,19 @@ class WorkflowsExecutorService:
         self.rest_client = RestClient(timeout=300)
         self.genai_client = GenAIModelSetup.init()
 
-    def _normalize_asset_inputs(self, inputs, default_role: AssetRoleEnum = "input"):
+    def _normalize_asset_inputs(
+        self, inputs, default_role: AssetRoleEnum = AssetRoleEnum.INPUT
+    ):
         """
-        Normalizes mixed input types (int, list, ReferenceImage) into 
+        Normalizes mixed input types (int, list, ReferenceImage) into
         structured media items and asset IDs.
         """
         media_items = []
         asset_ids = []
-        
+
         # Wrap single items in a list for uniform processing
         raw_list = inputs if isinstance(inputs, list) else [inputs] if inputs is not None else []
-        
+
         # Helper to flatten nested lists
         def flatten(items):
             for x in items:
@@ -66,45 +68,49 @@ class WorkflowsExecutorService:
 
         for item in flatten(raw_list):
             if isinstance(item, int):
-                media_items.append({
-                    "media_item_id": item, 
-                    "media_index": 0, 
-                    "role": default_role
-                })
+                media_items.append(
+                    {
+                        "media_item_id": item,
+                        "media_index": 0,
+                        "role": default_role.value,
+                    }
+                )
             elif isinstance(item, ReferenceImage):
                 if item.sourceMediaItem:
-                    media_items.append({
-                        "media_item_id": item.sourceMediaItem.mediaItemId,
-                        "media_index": item.sourceMediaItem.mediaIndex,
-                        "role": item.sourceMediaItem.role or default_role
-                    })
+                    media_items.append(
+                        {
+                            "media_item_id": item.sourceMediaItem.mediaItemId,
+                            "media_index": item.sourceMediaItem.mediaIndex,
+                            "role": item.sourceMediaItem.role
+                            or default_role.value,
+                        }
+                    )
                 elif item.sourceAssetId:
                     asset_ids.append(item.sourceAssetId)
         return media_items, asset_ids
 
-    
     async def _poll_job_status(self, media_id: int, authorization: str | None = None):
         """
         Polls the gallery endpoint until the job is completed or failed.
         """
-        
+
         url = f"{self.backend_url}/api/gallery/item/{media_id}"
         headers = {"Authorization": authorization} if authorization else {}
-        
+
         # Poll configuration
         initial_delay = 2
         poll_interval = 5
         timeout = 300  # 5 minutes timeout
-        
+
         await asyncio.sleep(initial_delay)
-        
+
         start_time = asyncio.get_event_loop().time()
-        
+
         while True:
             current_time = asyncio.get_event_loop().time()
             if current_time - start_time > timeout:
                 raise HTTPException(status_code=504, detail="Image generation timed out")
-                
+
             try:
                 response = await self.rest_client.get(url, headers=headers)
                 if response.status_code != 200:
@@ -113,7 +119,7 @@ class WorkflowsExecutorService:
                 else:
                     data = response.json()
                     status = data.get("status")
-                    
+
                     if status == "completed":
                         return True
                     elif status == "failed":
@@ -123,11 +129,10 @@ class WorkflowsExecutorService:
                 if isinstance(e, HTTPException):
                     raise e
                 logger.error(f"Error during polling: {e}")
-                # Continue polling? Or fail? 
+                # Continue polling? Or fail?
                 # If we can't check status, we might be blind.
-            
-            await asyncio.sleep(poll_interval)
 
+            await asyncio.sleep(poll_interval)
 
     async def _resolve_media_to_parts(self, inputs, authorization: str | None = None) -> List[types.Part]:
         """
@@ -135,9 +140,9 @@ class WorkflowsExecutorService:
         """
         parts = []
         media_items, asset_ids = self._normalize_asset_inputs(inputs)
-        
+
         headers = {"Authorization": authorization} if authorization else {}
-        
+
         # Resolve Media Items
         for item in media_items:
             media_id = item["media_item_id"]
@@ -187,34 +192,38 @@ class WorkflowsExecutorService:
             max_output_tokens=65535,
             safety_settings=[
                 types.SafetySetting(
-                    category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.OFF,
                 ),
                 types.SafetySetting(
-                    category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.OFF,
                 ),
                 types.SafetySetting(
-                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.OFF,
                 ),
                 types.SafetySetting(
-                    category="HARM_CATEGORY_HARASSMENT", threshold="OFF"
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.OFF,
                 ),
             ],
         )
 
         contents = []
-        
+
         logger.info(f"generate_text inputs: {request.inputs}")
         # 1. Add Text Prompt
         if isinstance(request.inputs.prompt, str):
             contents.append(types.Part.from_text(text=request.inputs.prompt))
-        
+
         # 2. Add Images
         if request.inputs.input_images:
             logger.info("Adding images")
             image_parts = await self._resolve_media_to_parts(request.inputs.input_images, authorization)
             logger.info(f"Image parts: {image_parts}")
             contents.extend(image_parts)
-            
+
         # 3. Add Videos
         if request.inputs.input_videos:
             video_parts = await self._resolve_media_to_parts(request.inputs.input_videos, authorization)
@@ -231,7 +240,6 @@ class WorkflowsExecutorService:
             if chunk.text:
                 text += chunk.text
         return {"generated_text": text}
-
 
     async def generate_image(self, request: GenerateImageRequest, authorization: str | None = None):
         logger.info(f"Generate image execution")
@@ -254,19 +262,19 @@ class WorkflowsExecutorService:
         )
 
         response = await self.rest_client.post(url, json=body, headers=headers)
-        
+
         if response.status_code != 200:
-             logger.error(f"Backend error: {response.text}")
-             raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
+            logger.error(f"Backend error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
 
         dict_response = response.json()
         image_id = dict_response.get("id", None)
         if not image_id:
             raise HTTPException(status_code=500, detail="Couldn't create image")
-            
+
         # Poll for completion
         await self._poll_job_status(image_id, authorization)
-        
+
         return {"generated_image": image_id}
 
     async def edit_image(self, request: EditImageRequest, authorization: str | None = None):
@@ -294,19 +302,19 @@ class WorkflowsExecutorService:
         )
 
         response = await self.rest_client.post(url, json=body, headers=headers)
-        
+
         if response.status_code != 200:
-             logger.error(f"Backend error: {response.text}")
-             raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
-             
+            logger.error(f"Backend error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
+
         dict_response = response.json()
         image_id = dict_response.get("id", None)
         if not image_id:
             raise HTTPException(status_code=500, detail="Couldn't edit image")
-        
+
         # Poll for completion
         await self._poll_job_status(image_id, authorization)
-        
+
         return {"edited_image": image_id}
 
     async def generate_video(self, request: GenerateVideoRequest, authorization: str | None = None):
@@ -316,8 +324,8 @@ class WorkflowsExecutorService:
 
         # 1. Process main reference images
         media_items, asset_ids = self._normalize_asset_inputs(
-            request.inputs.input_images, 
-            default_role=AssetRoleEnum.IMAGE_REFERENCE_ASSET
+            request.inputs.input_images,
+            default_role=AssetRoleEnum.IMAGE_REFERENCE_ASSET,
         )
 
         reference_images = []
@@ -326,20 +334,17 @@ class WorkflowsExecutorService:
 
         # 2. Process Start Frame
         start_media, start_assets = self._normalize_asset_inputs(
-            request.inputs.start_frame, 
-            default_role=AssetRoleEnum.START_FRAME
+            request.inputs.start_frame, default_role=AssetRoleEnum.START_FRAME
         )
         media_items.extend(start_media)
         start_image_asset_id = start_assets[0] if start_assets else None
 
         # 3. Process End Frame
         end_media, end_assets = self._normalize_asset_inputs(
-            request.inputs.end_frame, 
-            default_role=AssetRoleEnum.END_FRAME
+            request.inputs.end_frame, default_role=AssetRoleEnum.END_FRAME
         )
         media_items.extend(end_media)
         end_image_asset_id = end_assets[0] if end_assets else None
-
 
         body = {
             "prompt": request.inputs.prompt,
@@ -350,7 +355,7 @@ class WorkflowsExecutorService:
             "source_media_items": media_items,
             "start_image_asset_id": start_image_asset_id,
             "end_image_asset_id": end_image_asset_id,
-            "number_of_media": 1, 
+            "number_of_media": 1,
         }
 
         headers = {"Authorization": authorization} if authorization else {}
@@ -360,19 +365,19 @@ class WorkflowsExecutorService:
         )
 
         response = await self.rest_client.post(url, json=body, headers=headers)
-        
+
         if response.status_code != 200:
-             logger.error(f"Backend error: {response.text}")
-             raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
+            logger.error(f"Backend error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
 
         dict_response = response.json()
         video_id = dict_response.get("id", None)
         if not video_id:
             raise HTTPException(status_code=500, detail="Couldn't create video")
-        
+
         # Poll for completion
         await self._poll_job_status(video_id, authorization)
-        
+
         return {"generated_video": video_id}
 
     async def crop_image(self, request: CropImageRequest):
@@ -382,13 +387,13 @@ class WorkflowsExecutorService:
     def _map_to_vto_input_link(self, input_data: int | list | ReferenceImage) -> Optional[dict]:
         if not input_data:
             return None
-            
+
         # If input is a list, take the first element
         if isinstance(input_data, list):
             if len(input_data) == 0:
                 return None
             input_data = input_data[0]
-            
+
         # Handle ReferenceImage
         if isinstance(input_data, ReferenceImage):
             if input_data.sourceMediaItem:
@@ -400,7 +405,7 @@ class WorkflowsExecutorService:
                 }
             elif input_data.sourceAssetId:
                 return {"source_asset_id": input_data.sourceAssetId}
-                
+
         if isinstance(input_data, int):
             return {
                 "source_media_item": {
@@ -408,24 +413,24 @@ class WorkflowsExecutorService:
                     "media_index": 0,
                 }
             }
-            
+
         return None
 
     async def virtual_try_on(self, request: VirtualTryOnRequest, authorization: str | None = None):
         logger.info(f"Virtual Try On execution")
-        
+
         url = self.backend_url + "/api/images/generate-images-for-vto"
-        
+
         # Map inputs
-        person_image = self._map_to_vto_input_link(request.inputs.model_image)
-        top_image = self._map_to_vto_input_link(request.inputs.top_image)
-        bottom_image = self._map_to_vto_input_link(request.inputs.bottom_image)
-        dress_image = self._map_to_vto_input_link(request.inputs.dress_image)
-        shoes_image = self._map_to_vto_input_link(request.inputs.shoes_image)
-        
+        person_image = self._map_to_vto_input_link(request.inputs.model_image) # type: ignore
+        top_image = self._map_to_vto_input_link(request.inputs.top_image) # type: ignore
+        bottom_image = self._map_to_vto_input_link(request.inputs.bottom_image) # type: ignore
+        dress_image = self._map_to_vto_input_link(request.inputs.dress_image) # type: ignore
+        shoes_image = self._map_to_vto_input_link(request.inputs.shoes_image) # type: ignore
+
         # Ensure person_image is present (it's required in VtoDto)
         if not person_image:
-             raise HTTPException(status_code=400, detail="Person image is required for Virtual Try-On")
+            raise HTTPException(status_code=400, detail="Person image is required for Virtual Try-On")
 
         body = {
             "workspace_id": request.workspace_id,
@@ -444,26 +449,26 @@ class WorkflowsExecutorService:
         )
 
         response = await self.rest_client.post(url, json=body, headers=headers)
-        
+
         if response.status_code != 200:
-             logger.error(f"Backend error: {response.text}")
-             raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
-             
+            logger.error(f"Backend error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
+
         dict_response = response.json()
         image_id = dict_response.get("id", None)
         if not image_id:
             raise HTTPException(status_code=500, detail="Couldn't create VTO image")
-        
+
         # Poll for completion
         await self._poll_job_status(image_id, authorization)
-        
+
         return {"generated_image": image_id}
 
     async def generate_audio(self, request: GenerateAudioRequest, authorization: str | None = None):
         logger.info(f"Generate audio execution")
-        
+
         url = self.backend_url + "/api/audios/generate"
-        
+
         body = {
             "workspace_id": request.workspace_id,
             "prompt": request.inputs.prompt,
@@ -473,7 +478,7 @@ class WorkflowsExecutorService:
             "negative_prompt": request.config.negative_prompt,
             "seed": request.config.seed,
         }
-        
+
         # Filter None values to let DTO defaults take over if needed
         body = {k: v for k, v in body.items() if v is not None}
 
@@ -485,18 +490,18 @@ class WorkflowsExecutorService:
 
         # Note: Audio generation is synchronous in the current controller/service implementation
         response = await self.rest_client.post(url, json=body, headers=headers)
-        
+
         if response.status_code != 200:
-             logger.error(f"Backend error: {response.text}")
-             raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
+            logger.error(f"Backend error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Backend error: {response.text}")
 
         dict_response = response.json()
         audio_id = dict_response.get("id", None)
-        
+
         if not audio_id:
-             raise HTTPException(status_code=500, detail="Couldn't create audio")
-             
+            raise HTTPException(status_code=500, detail="Couldn't create audio")
+
         # Poll for completion
         await self._poll_job_status(audio_id, authorization)
-        
+
         return {"generated_audio": audio_id}
