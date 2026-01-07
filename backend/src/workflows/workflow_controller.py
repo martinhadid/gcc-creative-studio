@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Header
-from typing import Annotated
 
 from src.auth.auth_guard import RoleChecker, get_current_user
 from src.common.dto.pagination_response_dto import PaginationResponseDto
@@ -32,7 +31,6 @@ router = APIRouter(
             RoleChecker(
                 allowed_roles=[
                     UserRoleEnum.ADMIN,
-                    UserRoleEnum.USER,
                 ]
             )
         )
@@ -145,7 +143,6 @@ async def execute_workflow(
     workflow_id: str,
     workflow_execute_dto: WorkflowExecuteDto,
     authorization: str | None = Header(default=None),
-    current_user: UserModel = Depends(get_current_user),
     workflow_service: WorkflowService = Depends(),
 ):
     """
@@ -182,7 +179,7 @@ async def get_execution(
 
 
 @router.get("/{workflow_id}/executions")
-def list_executions(
+async def list_executions(
     workflow_id: str,
     limit: int = 10,
     page_token: str = None,
@@ -192,7 +189,7 @@ def list_executions(
 ):
     """Lists executions for a workflow."""
     # Check access
-    workflow = workflow_service.get_workflow(current_user.id, workflow_id)
+    workflow = await workflow_service.get_workflow(current_user.id, workflow_id)
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
