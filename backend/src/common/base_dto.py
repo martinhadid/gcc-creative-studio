@@ -31,6 +31,14 @@ class MimeTypeEnum(str, Enum):
     AUDIO_WEBM = "audio/webm"
 
 
+class WildcardMimeTypeEnum(str, Enum):
+    """Wildcard MIME types for search filtering."""
+
+    IMAGE_WILDCARD = "image/*"
+    VIDEO_WILDCARD = "video/*"
+    AUDIO_WILDCARD = "audio/*"
+
+
 class GenerationModelEnum(str, Enum):
     """Enum representing the available generation models."""
 

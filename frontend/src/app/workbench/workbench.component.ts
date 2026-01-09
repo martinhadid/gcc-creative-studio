@@ -260,10 +260,16 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       if (aud && aClip) {
         const fileTime = (curTime - aClip.startTime) + aClip.offset;
         if (Math.abs(aud.currentTime - fileTime) > 0.5) aud.currentTime = fileTime;
-        if (this.isPlaying() && aud.paused) aud.play().catch(() => {});
-        if (!this.isPlaying() && !aud.paused) aud.pause();
+        if (this.isPlaying() && aud.paused) {
+            aud.play().catch(e => console.error('Audio play failed', e));
+        }
+        if (!this.isPlaying() && !aud.paused) {
+            aud.pause();
+        }
       } else if (aud) {
-        aud.pause();
+        if (!aud.paused) {
+             aud.pause();
+        }
       }
     });
   }
@@ -299,8 +305,8 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
         name: file.name,
         type: isVideo ? 'video' : 'audio',
         url: objectUrl,
-        // FIXED: Reverted to bypassSecurityTrustResourceUrl as requested by user
-        safeUrl: this.sanitizer.bypassSecurityTrustResourceUrl(objectUrl),
+        // Use bypassSecurityTrustUrl for media src
+        safeUrl: this.sanitizer.bypassSecurityTrustUrl(objectUrl),
         duration: 0,
       };
 
@@ -375,7 +381,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       name,
       type,
       url,
-      safeUrl: this.sanitizer.bypassSecurityTrustResourceUrl(url),
+      safeUrl: this.sanitizer.bypassSecurityTrustUrl(url),
       duration: 0,
       thumbnail,
     };
@@ -422,13 +428,16 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private extractAudioMetadataFromUrl(asset: MediaAsset) {
-    const audio = new Audio();
+    const audio = document.createElement('audio');
     audio.crossOrigin = 'anonymous';
+    audio.muted = true;
+    audio.volume = 0; // Double safety
+    audio.autoplay = false;
     audio.src = asset.url;
     audio.onloadedmetadata = () => {
       this.updateAssetDuration(asset.id, audio.duration);
     };
-    audio.onerror = () => {
+    audio.onerror = (e) => {
       // If audio fails to load metadata, set a default duration
       this.updateAssetDuration(asset.id, 10);
     };
@@ -437,6 +446,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   extractVideoMetadata(asset: MediaAsset, file: File) {
     const video = document.createElement('video');
     video.preload = 'metadata';
+    video.muted = true;
+    video.volume = 0;
+    video.autoplay = false;
     video.src = asset.url;
     video.onloadedmetadata = () => {
       this.updateAssetDuration(asset.id, video.duration);
@@ -457,7 +469,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   extractAudioMetadata(asset: MediaAsset) {
-    const audio = new Audio(asset.url);
+    const audio = document.createElement('audio');
+    audio.muted = true;
+    audio.volume = 0;
+    audio.autoplay = false;
+    audio.src = asset.url;
     audio.onloadedmetadata = () => {
         this.updateAssetDuration(asset.id, audio.duration);
     };
