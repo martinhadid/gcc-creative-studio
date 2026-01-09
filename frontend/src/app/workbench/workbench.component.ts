@@ -743,13 +743,57 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   onMetadataLoaded() {}
 
   // --- Interaction ---
+  
+  // Scrubbing State
+  scrubState: { active: boolean; startX: number; initialTime: number } | null = null;
+
+  onScrubStart(event: MouseEvent) {
+      event.preventDefault();
+      event.stopPropagation(); // Stop bubbling to container
+      
+      this.scrubState = {
+          active: true,
+          startX: event.clientX,
+          initialTime: this.currentTime()
+      };
+      this.isPlaying.set(false);
+  }
+
+  onScrubMove(event: MouseEvent) {
+      if (!this.scrubState?.active) return;
+      
+      const deltaX = event.clientX - this.scrubState.startX;
+      const deltaTime = deltaX / this.pixelsPerSecond;
+      const newTime = Math.max(0, Math.min(this.scrubState.initialTime + deltaTime, this.totalDuration()));
+      
+      this.currentTime.set(newTime);
+  }
+
+  onScrubEnd() {
+      this.scrubState = null;
+  }
+
   onTimelineMouseDown(event: MouseEvent) {
       if (this.dragState?.active) return;
-      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      const scrollLeft = (event.currentTarget as HTMLElement).scrollLeft;
-      const clickX = event.clientX - rect.left + scrollLeft;
+      
+      // If clicking on ruler/timeline bg, start scrubbing
+      // Use offsetX if the target is the container itself for better accuracy
+      // Otherwise fallback to clientX calculation
+      let clickX = 0;
+      const target = event.target as HTMLElement;
+      const currentTarget = event.currentTarget as HTMLElement;
+      
+      if (target === currentTarget) {
+          clickX = event.offsetX + currentTarget.scrollLeft;
+      } else {
+          const rect = currentTarget.getBoundingClientRect();
+          clickX = (event.clientX - rect.left) + currentTarget.scrollLeft;
+      }
+
       const time = Math.max(0, clickX / this.pixelsPerSecond);
       this.currentTime.set(time);
+      
+      this.onScrubStart(event);
       this.selectedClipId.set(null);
   }
 
