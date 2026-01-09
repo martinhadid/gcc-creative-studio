@@ -262,7 +262,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       if (vid && vClip) {
         const fileTime = (curTime - vClip.startTime) + vClip.offset;
         if (Math.abs(vid.currentTime - fileTime) > 0.5) vid.currentTime = fileTime;
-        if (this.isPlaying() && vid.paused) vid.play().catch(() => {});
+        if (this.isPlaying() && vid.paused) vid.play().catch(e => console.error('[VideoSync] Play failed', e));
         if (!this.isPlaying() && !vid.paused) vid.pause();
       } else if (vid) {
         vid.pause();
@@ -605,6 +605,28 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     }
 
     this.timelineClips.update(prev => [...prev, ...clipsToAdd]);
+    this.refreshTimelineLayout();
+  }
+
+  deleteAsset(asset: MediaAsset, event: Event) {
+    event.stopPropagation();
+    
+    // Remove from assets list
+    this.assets.update(prev => prev.filter(a => a.id !== asset.id));
+    
+    // Remove any clips associated with this asset from the timeline
+    this.timelineClips.update(prev => prev.filter(c => c.assetId !== asset.id));
+    
+    // Clear selection if it was a clip of this asset
+    const selectedId = this.selectedClipId();
+    if (selectedId) {
+        const stillExists = this.timelineClips().some(c => c.id === selectedId);
+        if (!stillExists) {
+            this.selectedClipId.set(null);
+        }
+    }
+    
+    this.refreshTimelineLayout();
   }
 
   private findAvailableAudioTrack(startTime: number, duration: number): number {
