@@ -14,6 +14,7 @@
 
 from fastapi import Depends
 import logging
+import asyncio
 import uuid
 import json
 
@@ -38,8 +39,15 @@ from src.workflows.schema.workflow_model import (
     NodeTypes,
     WorkflowCreateDto,
     StepOutputReference,
+    StepOutputReference,
     WorkflowModel,
 )
+from src.workflows.dto.batch_execution_dto import (
+    BatchExecutionRequestDto,
+    BatchExecutionResponseDto,
+    BatchItemResultDto,
+)
+from src.source_assets.source_asset_service import SourceAssetService
 
 logger = logging.getLogger(__name__)
 PROJECT_ID = config_service.PROJECT_ID
@@ -50,9 +58,14 @@ BACKEND_EXECUTOR_URL = config_service.WORKFLOWS_EXECUTOR_URL
 class WorkflowService:
     """Orchestrates multi-step generative AI workflows."""
 
-    def __init__(self, workflow_repository: WorkflowRepository = Depends()):
+    def __init__(
+        self,
+        workflow_repository: WorkflowRepository = Depends(),
+        source_asset_service: SourceAssetService = Depends(),
+    ):
         self.imagen_service = ImagenService()
         self.workflow_repository = workflow_repository
+        self.source_asset_service = source_asset_service
 
     def _generate_workflow_yaml(
         self,
@@ -315,10 +328,101 @@ class WorkflowService:
             parent=parent, execution=execution
         )
 
-        # Extract just the execution ID (UUID) from the full resource name
-        # Format: projects/{project}/locations/{location}/workflows/{workflow}/executions/{execution_id}
         execution_id = response.name.split('/')[-1]
         return execution_id
+
+    async def batch_execute_workflow(
+        self,
+        workflow_id: str,
+        batch_dto: BatchExecutionRequestDto,
+        user: UserModel,
+    ) -> BatchExecutionResponseDto:
+        """
+        Executes a workflow for each item in the batch request.
+        Handles GCS URI ingestion for image arguments.
+        """
+        results: list[BatchItemResultDto] = []
+        
+        # We can parallelize the entire row processing (Ingest + Execute)
+        # Using a semaphore/lock to serialize DB access since we share a session.
+        db_lock = asyncio.Lock()
+        
+        async def process_row(item) -> BatchItemResultDto:
+            try:
+                # 1. Process Arguments (Ingest GCS URIs)
+                processed_args = {}
+                workspace_id = item.args.get("workspace_id")
+
+                async def ingest_gcs_uri(uri: str, w_id: int):
+                    async with db_lock:
+                        asset = await self.source_asset_service.create_from_gcs_uri(
+                            user=user,
+                            workspace_id=w_id,
+                            gcs_uri=uri
+                        )
+                    # Return structure compatible with ReferenceImage pydantic model
+                    return {"sourceAssetId": asset.id, "previewUrl": uri}
+
+                for key, value in item.args.items():
+                    is_gcs_string = isinstance(value, str) and value.startswith("gs://")
+                    is_gcs_list = (
+                        isinstance(value, list)
+                        and len(value) > 0
+                        and isinstance(value[0], str)
+                        and value[0].startswith("gs://")
+                    )
+
+                    if is_gcs_string or is_gcs_list:
+                         try:
+                             if not workspace_id: 
+                                raise ValueError("No workspace_id provided for GCS ingestion.")
+                             
+                             w_id = int(workspace_id)
+                             
+                             if is_gcs_string:
+                                 processed_args[key] = await ingest_gcs_uri(value, w_id)
+                             else:
+                                 # It's a list
+                                 processed_args[key] = [
+                                     await ingest_gcs_uri(uri, w_id) for uri in value
+                                 ]
+                         except Exception as e:
+                             return BatchItemResultDto(
+                                 row_index=item.row_index,
+                                 status="FAILED",
+                                 error=f"Invalid GCS URI in '{key}': {str(e)}"
+                             )
+                    else:
+                        processed_args[key] = value
+
+                # 2. Execute Workflow
+                # execute_workflow is synchronous (wraps asyncio calls to GCP? No, it uses library).
+                # Wait, execute_workflow calls `execution_client.create_execution` which is blocking or async?
+                # It seems blocking in `workflow_service.py` (no await).
+                # We should wrap it in `asyncio.to_thread` if it's blocking.
+                execution_id = await asyncio.to_thread(
+                    self.execute_workflow,
+                    workflow_id=workflow_id,
+                    args=processed_args
+                )
+                
+                return BatchItemResultDto(
+                    row_index=item.row_index,
+                    execution_id=execution_id,
+                    status="SUCCESS"
+                )
+
+            except Exception as e:
+                 return BatchItemResultDto(
+                    row_index=item.row_index,
+                    status="FAILED",
+                    error=str(e)
+                )
+
+        tasks = [process_row(item) for item in batch_dto.items]
+        results = await asyncio.gather(*tasks)
+        
+        return BatchExecutionResponseDto(results=results)
 
     async def get_execution_details(
         self, workflow_id: str, execution_id: str
