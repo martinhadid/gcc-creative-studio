@@ -12,218 +12,86 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Header
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.auth.auth_guard import RoleChecker, get_current_user
-from src.common.dto.pagination_response_dto import PaginationResponseDto
 from src.users.user_model import UserModel, UserRoleEnum
-from src.workflows.dto.workflow_search_dto import WorkflowSearchDto
-from src.workflows.schema.workflow_model import WorkflowCreateDto, WorkflowModel, WorkflowExecuteDto
-from src.workflows.dto.batch_execution_dto import (
-    BatchExecutionRequestDto,
-    BatchExecutionResponseDto,
-)
-from src.workflows.workflow_service import WorkflowService
-from src.workspaces.workspace_auth_guard import workspace_auth_service
+from src.workspaces.dto.create_workspace_dto import CreateWorkspaceDto
+from src.workspaces.dto.invite_user_dto import InviteUserDto
+from src.workspaces.schema.workspace_model import WorkspaceModel
+from src.workspaces.workspace_service import WorkspaceService
 
 router = APIRouter(
-    prefix="/api/workflows",
-    tags=["Workflows"],
-    responses={404: {"description": "Not found"}},
+    prefix="/api/workspaces",
+    tags=["Workspaces"],
     dependencies=[
-        Depends(
-            RoleChecker(
-                allowed_roles=[
-                    UserRoleEnum.ADMIN,
-                ]
-            )
-        )
-    ],
+        Depends(get_current_user)
+    ],  # All endpoints require authentication
 )
 
 
-@router.post("/search", response_model=PaginationResponseDto[WorkflowModel])
-async def search_workflows(
-    search_params: WorkflowSearchDto,
+@router.post(
+    "",
+    response_model=WorkspaceModel,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a New Workspace",
+)
+async def create_workspace(
+    create_dto: CreateWorkspaceDto,
     current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
+    workspace_service: WorkspaceService = Depends(),
 ):
-    """Lists all workflows for the current user."""
-    return await workflow_service.query_workflows(
-        user_id=current_user.id,
-        search_dto=search_params,
+    """
+    Creates a new private workspace for the currently authenticated user.
+    The creator is automatically assigned as the 'OWNER'.
+    """
+    return await workspace_service.create_workspace(current_user, create_dto)
+
+
+@router.get(
+    "",
+    response_model=List[WorkspaceModel],
+    summary="List Workspaces for Current User",
+)
+async def list_my_workspaces(
+    current_user: UserModel = Depends(get_current_user),
+    workspace_service: WorkspaceService = Depends(),
+):
+    """
+    Retrieves a list of all workspaces the currently authenticated user
+    is a member of.
+    """
+    return await workspace_service.list_workspaces_for_user(current_user)
+
+
+@router.post(
+    "/{workspace_id}/invites",
+    response_model=WorkspaceModel,
+    summary="Invite a User to a Workspace",
+)
+async def invite_user(
+    workspace_id: int,
+    invite_dto: InviteUserDto,
+    current_user: UserModel = Depends(get_current_user),
+    workspace_service: WorkspaceService = Depends(),
+):
+    """
+    Invites a user (by email) to join a specific workspace with a given role.
+
+    This action is restricted to the workspace's OWNER or a system ADMIN.
+    It performs a dual-write, updating both the workspace's member list
+    and the invited user's list of workspace memberships.
+    """
+    updated_workspace = await workspace_service.invite_user_to_workspace(
+        workspace_id=workspace_id,
+        invite_dto=invite_dto,
+        current_user=current_user,
     )
-
-
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_workflow(
-    workflow_data: WorkflowCreateDto,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """Creates a new workflow definition."""
-    created_workflow = await workflow_service.create_workflow(
-        workflow_data, current_user
-    )
-
-    return created_workflow
-
-
-@router.put("/{workflow_id}", response_model=WorkflowModel)
-async def update_workflow(
-    workflow_id: str,
-    workflow_data: WorkflowCreateDto,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """Updates an existing workflow definition."""
-    # 1. Fetch the existing workflow first to ensure it exists.
-    existing_workflow = await workflow_service.get_by_id(workflow_id)
-    if not existing_workflow:
+    if not updated_workspace:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workflow with ID '{workflow_id}' not found.",
+            detail="Workspace or user to invite not found.",
         )
-
-    # 2. Verify that the workflow belongs to the user or handle auth as needed.
-    # (Since it's shared across workspaces, we use user-level auth)
-    if existing_workflow.user_id != current_user.id:
-         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to update this workflow.",
-        )
-
-    # 4. Pass the DTO to the service to handle the update logic.
-    # Service update_workflow returns the coroutine from repo.update_workflow, so we await it.
-    return await workflow_service.update_workflow(
-        workflow_id, workflow_data, current_user
-    )
-
-
-@router.get("/{workflow_id}", response_model=WorkflowModel)
-async def get_workflow(
-    workflow_id,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    try:
-        workflow = await workflow_service.get_workflow(current_user.id, workflow_id)
-        if workflow:
-            return workflow
-        return Response(status_code=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response(
-            content=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@router.delete(
-    "/{workflow_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a Workflow",
-)
-async def delete_workflow(
-    workflow_id: str,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """
-    Permanently deletes a workflow from the database.
-    This functionality is restricted to owners of the workflow.
-    """
-    workflow = await workflow_service.get_workflow(
-        current_user.id, workflow_id  # type: ignore
-    )
-
-    if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-
-    if not await workflow_service.delete_by_id(workflow_id):
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return
-
-@router.post("/{workflow_id}/workflow-execute")
-async def execute_workflow(
-    workflow_id: str,
-    workflow_execute_dto: WorkflowExecuteDto,
-    authorization: str | None = Header(default=None),
-    workflow_service: WorkflowService = Depends(),
-):
-    """
-    This function is the controller that calls the service to generate the workflow.
-    """
-    workflow_execute_dto.args["user_auth_header"] = authorization
-
-    response = workflow_service.execute_workflow(
-        workflow_id=workflow_id, args=workflow_execute_dto.args
-    )
-    print(f"Created execution: {response}")
-    return {"execution_id": response}
-
-
-@router.post("/{workflow_id}/batch-execute", response_model=BatchExecutionResponseDto)
-async def batch_execute_workflow(
-    workflow_id: str,
-    batch_dto: BatchExecutionRequestDto,
-    authorization: str | None = Header(default=None),
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """
-    Executes a batch of workflow runs based on the provided items.
-    """
-    # Inject user_auth_header into each item's args
-    if authorization:
-        for item in batch_dto.items:
-            item.args["user_auth_header"] = authorization
-
-    return await workflow_service.batch_execute_workflow(
-        workflow_id=workflow_id,
-        batch_dto=batch_dto,
-        user=current_user,
-    )
-
-
-@router.get("/{workflow_id}/executions/{execution_id}")
-async def get_execution(
-    workflow_id: str,
-    execution_id: str,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """Retrieves the details of a workflow execution."""
-    # We might want to authorize against the workspace of the workflow here
-    # But for now let's just check if the user has access to the workflow
-    workflow = await workflow_service.get_workflow(current_user.id, workflow_id)
-    if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-        
-    execution = await workflow_service.get_execution_details(workflow_id, execution_id)
-    if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
-    
-    return execution
-
-
-@router.get("/{workflow_id}/executions")
-async def list_executions(
-    workflow_id: str,
-    limit: int = 10,
-    page_token: str = None,
-    status: str = None,
-    current_user: UserModel = Depends(get_current_user),
-    workflow_service: WorkflowService = Depends(),
-):
-    """Lists executions for a workflow."""
-    # Check access
-    workflow = await workflow_service.get_workflow(current_user.id, workflow_id)
-    if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-
-    filter_str = None
-    if status and status != "ALL":
-        filter_str = f'state="{status}"'
-
-    return workflow_service.list_executions(
-        workflow_id=workflow_id, limit=limit, page_token=page_token, filter_str=filter_str
-    )
+    return updated_workspace
