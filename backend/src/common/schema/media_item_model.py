@@ -148,6 +148,7 @@ class MediaItem(Base):
     num_media: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     generation_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    thumbnail_uris: Mapped[List[str]] = mapped_column(ARRAY(String), default=[])
 
     # Enums
     aspect_ratio: Mapped[AspectRatioEnum] = mapped_column(String, nullable=False)
@@ -167,7 +168,6 @@ class MediaItem(Base):
 
     # Video specific
     duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    thumbnail_uris: Mapped[List[str]] = mapped_column(ARRAY(String), default=[])
     comment: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # Image specific
