@@ -79,7 +79,7 @@ export class MediaResolutionService {
 
     const requests = [
       ...mediaIdsToFetch.map(id =>
-        this.galleryService.getMedia(String(id)).pipe(
+        this.galleryService.getMedia(id as number).pipe(
           map(mediaItem => ({ key: `media:${id}`, url: mediaItem.presignedUrls?.[0] })),
           catchError(err => {
             console.error(`Failed to resolve media ID ${id}`, err);
@@ -88,8 +88,8 @@ export class MediaResolutionService {
         )
       ),
       ...sourceIdsToFetch.map(id =>
-        this.sourceAssetService.getAssetById(Number(id)).pipe(
-          map((asset: SourceAssetResponseDto) => ({ key: `asset:${id}`, url: asset.presignedUrl })),
+        this.sourceAssetService.getAsset(id as any).pipe(
+          map(asset => ({ key: `asset:${id}`, url: asset.presignedUrl })),
           catchError(err => {
             console.error(`Failed to resolve source asset ID ${id}`, err);
             return of(null);

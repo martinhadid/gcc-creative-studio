@@ -117,12 +117,14 @@ export class UpscaleComponent implements OnInit, OnDestroy {
     if (event) event.stopPropagation();
 
     const dialogRef = this.dialog.open(ImageSelectorComponent, {
-      width: '800px',
+      width: '90vw',
+      height: '80vh',
+      maxWidth: '90vw',
       data: {
         mimeType: 'image/*',
         assetType: this.assetType,
         enableUpscale: true // Enable upscale UI for this specific flow
-      },
+      }
     });
 
     dialogRef.afterClosed().subscribe((result) => {

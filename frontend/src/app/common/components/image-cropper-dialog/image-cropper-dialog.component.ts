@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Component, Inject, OnInit, OnDestroy } from '@angular/core'; // Added OnInit, OnDestroy
+import { Component, Inject, OnInit, OnDestroy } from '@angular/core';
 import {MAT_DIALOG_DATA, MatDialogRef} from '@angular/material/dialog';
 import {
   ImageCroppedEvent,
@@ -24,7 +24,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { handleErrorSnackbar } from '../../../utils/handleMessageSnackbar';
 import {HttpClient} from '@angular/common/http';
-import { Observable, finalize, Subject, takeUntil } from 'rxjs'; // Added Subject, takeUntil
+import { Observable, finalize, Subject, takeUntil } from 'rxjs';
 import {
   SourceAssetService,
 } from '../../services/source-asset.service';
@@ -32,7 +32,7 @@ import {
   AssetTypeEnum,
 } from '../../../admin/source-assets-management/source-asset.model';
 import {environment} from '../../../../environments/environment';
-import { MediaItem, JobStatus } from '../../models/media-item.model'; // Added MediaItem and JobStatus
+import { MediaItem, JobStatus } from '../../models/media-item.model';
 
 interface AspectRatio {
   label: string;
@@ -40,24 +40,22 @@ interface AspectRatio {
   stringValue: string;
 }
 
-// START: New Interface for Upscale Factor
 interface UpscaleFactor {
   label: string;
   value: number; // 1 for original, 2 for 2x, etc.
   stringValue: string; // "1x", "2x", "3x", "4x"
 }
-// END: New Interface for Upscale Factor
 
 @Component({
   selector: 'app-image-cropper-dialog',
   templateUrl: './image-cropper-dialog.component.html',
   styleUrls: ['./image-cropper-dialog.component.scss'],
 })
-export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added Lifecycle interfaces
+export class ImageCropperDialogComponent implements OnInit, OnDestroy {
   isUploading = false;
-  isConverting = false; // New state for the conversion step
-  imageFile: File | null = null; // Initialize as null
-  enableUpscale = false; // Add property for template access
+  isConverting = false;
+  imageFile: File | null = null;
+  enableUpscale = false;
 
   croppedImageBlob: Blob | null = null;
   aspectRatios: AspectRatio[] = [];
@@ -101,15 +99,12 @@ export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added
       imageFile: File;
       assetType: AssetTypeEnum;
       aspectRatios?: AspectRatio[];
-        enableUpscale?: boolean; // Added optional flag
+      enableUpscale?: boolean;
     },
   ) {
-    // Initialize the job stream from the service
     this.activeUpscaleJob$ = this.sourceAssetService.activeUpscaleJob$;
 
-    // START: Initialize enableUpscale
     this.enableUpscale = this.data.enableUpscale || false;
-    // END: Initialize enableUpscale
 
     this.aspectRatios = data.aspectRatios || [
       {label: '1:1 Square', value: 1 / 1, stringValue: '1:1'},
@@ -120,11 +115,8 @@ export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added
     ];
     this.currentAspectRatio = this.aspectRatios[0].value;
 
-    // START: Initialize currentUpscaleFactor
     this.currentUpscaleFactor = this.upscaleFactors[0].value;
-    // END: Initialize currentUpscaleFactor
 
-    // Initialize the options object
     this.options = {
       aspectRatio: this.currentAspectRatio,
       maintainAspectRatio: true,
@@ -132,17 +124,14 @@ export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added
       backgroundColor: this.backgroundColor,
       autoCrop: true,
     };
-    this.handleFile(this.data.imageFile); // Handle the file on init
+    this.handleFile(this.data.imageFile);
   }
 
-  // START: Lifecycle Hooks
   ngOnInit(): void {
-    // Monitor the job status to handle auto-closing on success
     this.activeUpscaleJob$
       .pipe(takeUntil(this.destroy$))
       .subscribe(job => {
         if (job?.status === JobStatus.COMPLETED) {
-          // Brief delay so the user sees the "Success" state in your new HTML
           setTimeout(() => {
             this.dialogRef.close(job);
           }, 1500);
@@ -154,9 +143,7 @@ export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added
     this.destroy$.next();
     this.destroy$.complete();
   }
-  // END: Lifecycle Hooks
 
-  // --- Start: New file handling logic ---
   handleFile(file: File): void {
     const supportedTypes = [
       'image/jpeg',
@@ -191,7 +178,6 @@ export class ImageCropperDialogComponent implements OnInit, OnDestroy { // Added
   private convertImageOnBackend(file: File): Observable<Blob> {
     const formData = new FormData();
     formData.append('file', file);
-    // Assumes you create a new backend endpoint for this
     const convertUrl = `${environment.backendURL}/source_assets/convert-to-png`;
     return this.http.post(convertUrl, formData, {responseType: 'blob'});
   }

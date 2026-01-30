@@ -283,7 +283,7 @@ class GalleryService:
         )
 
     async def get_media_by_id(
-        self, item_id: str, current_user: UserModel
+        self, item_id: int, current_user: UserModel
     ) -> Optional[MediaItemResponse]:
         """
         Retrieves a single media item, performs an authorization check,
@@ -313,6 +313,3 @@ class GalleryService:
 
         return await self._create_gallery_response(item)
     
-
-
-

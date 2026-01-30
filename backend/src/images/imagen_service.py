@@ -1068,7 +1068,7 @@ class ImagenService:
         return MediaItemResponse(**created_item.model_dump(), presigned_urls=[], original_presigned_urls=[])
 
 
-    async def start_image_generation_job(
+async def start_image_generation_job(
         self,
         request_dto: CreateImagenDto,
         user: UserModel,
@@ -1079,7 +1079,6 @@ class ImagenService:
         in the background.
         """
         # Create a placeholder document
-        # Do not allow manually setting ID for auto-increment columns
         placeholder_item = MediaItemModel(
             workspace_id=request_dto.workspace_id,
             user_email=user.email,
@@ -1100,13 +1099,12 @@ class ImagenService:
         )
 
         # Save the placeholder to the database immediately
-        created_item = await self.media_repo.create(placeholder_item)
-        media_item_id = created_item.id
+        placeholder_item = await self.media_repo.create(placeholder_item)
 
         # Submit the long-running function to the process pool
         executor.submit(
             _process_image_in_background,
-            media_item_id=media_item_id,
+            media_item_id=placeholder_item.id,
             request_dto=request_dto,
             current_user=user,
         )
@@ -1115,7 +1113,7 @@ class ImagenService:
             "Image generation job successfully queued.",
             extra={
                 "json_fields": {
-                    "media_id": media_item_id,
+                    "media_id": placeholder_item.id,
                     "user_email": user.email,
                     "model": request_dto.generation_model,
                 }
@@ -1123,7 +1121,7 @@ class ImagenService:
         )
 
         return MediaItemResponse(
-            **created_item.model_dump(),
+            **placeholder_item.model_dump(),
             presigned_urls=[],
             presigned_thumbnail_urls=[],
         )

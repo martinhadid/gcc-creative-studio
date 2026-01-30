@@ -18,8 +18,6 @@ from src.config.logger_config import setup_logging
 setup_logging()
 
 import logging
-import os
-from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from os import getenv
@@ -56,15 +54,15 @@ from src.workspaces.workspace_controller import router as workspace_router
 
 # Get a logger instance for use in this file. It will inherit the root setup.
 logger = logging.getLogger(__name__)
-load_dotenv()
+
 
 def configure_cors(app):
     """Configures CORS middleware based on the environment."""
-    environment = os.getenv("ENVIRONMENT")
+    environment = getenv("ENVIRONMENT")
     allowed_origins = []
 
     if environment == "production":
-        frontend_url = os.getenv("FRONTEND_URL")
+        frontend_url = getenv("FRONTEND_URL")
         if not frontend_url:
             raise ValueError(
                 "FRONTEND_URL environment variable not set in production"

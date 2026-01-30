@@ -15,29 +15,23 @@
  */
 
 import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule } from '@angular/material/dialog';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterModule, Routes } from '@angular/router';
-import { HomeComponent } from './home/home.component';
-import { LoginComponent } from './login/login.component';
+import { AdminAuthGuard } from './admin/admin-auth.guard';
+import { ArenaComponent } from './arena/arena.component';
+import { AudioComponent } from './audio/audio.component';
 import { AuthGuardService } from './common/services/auth.guard.service';
 import { FunTemplatesComponent } from './fun-templates/fun-templates.component';
-import { VideoComponent } from './video/video.component';
-import { ArenaComponent } from './arena/arena.component';
-import { MediaGalleryComponent } from './gallery/media-gallery/media-gallery.component';
 import { MediaDetailComponent } from './gallery/media-detail/media-detail.component';
-import { AdminAuthGuard } from './admin/admin-auth.guard';
+import { MediaGalleryComponent } from './gallery/media-gallery/media-gallery.component';
+import { HomeComponent } from './home/home.component';
+import { LoginComponent } from './login/login.component';
+import { VideoComponent } from './video/video.component';
 import { VtoComponent } from './vto/vto.component';
-import { AudioComponent } from './audio/audio.component';
+import { ExecutionHistoryComponent } from './workflows/execution-history/execution-history.component';
+import { WorkflowEditorComponent } from './workflows/workflow-editor/workflow-editor.component';
+import { WorkflowListComponent } from './workflows/workflow-list/workflow-list.component';
+import { WorkbenchComponent } from './workbench/workbench.component';
 import { UpscaleComponent } from './upscale/upscale.component';
-import { UpscaleImageDialogComponent } from './common/components/upscale-image-dialog/upscale-image-dialog.component';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -51,7 +45,7 @@ const routes: Routes = [
   {path: 'arena', component: ArenaComponent, canActivate: [AuthGuardService]},
   {path: 'vto', component: VtoComponent, canActivate: [AuthGuardService]},
   {path: 'audio', component: AudioComponent, canActivate: [AuthGuardService]},
-  { path: 'imagen-upscale', component: UpscaleComponent, canActivate: [AuthGuardService] },
+  {path: 'workbench', component:WorkbenchComponent, canActivate: [AuthGuardService]},
   // When a user goes to '/gallery', show the main feed.
   {
     path: 'gallery',
@@ -74,8 +68,6 @@ const routes: Routes = [
     loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule),
     canActivate: [AdminAuthGuard],
   },
-<<<<<<< HEAD
-=======
   {
     path: 'workflows',
     canActivate: [AuthGuardService],
@@ -87,12 +79,11 @@ const routes: Routes = [
       { path: ':id/executions', component: ExecutionHistoryComponent },
     ],
   },
->>>>>>> develop
+  { path: 'imagen-upscale', component: UpscaleComponent, canActivate: [AuthGuardService] },
 ];
 
 @NgModule({
-  declarations: [UpscaleComponent, UpscaleImageDialogComponent],
-  imports: [RouterModule.forRoot(routes), CommonModule, MatIconModule, MatDialogModule, MatButtonModule, MatProgressBarModule, MatProgressSpinnerModule, FormsModule, MatSelectModule, MatFormFieldModule],
+  imports: [RouterModule.forRoot(routes)],
   exports: [RouterModule],
 })
 export class AppRoutingModule { }

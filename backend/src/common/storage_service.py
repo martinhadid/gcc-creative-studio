@@ -220,6 +220,10 @@ class GcsService:
                 f"Blob '{destination_blob_name}' not found in bucket '{self.bucket_name}'."
             )
             return None
+        except exceptions.GoogleAPICallError as e:
+            logger.error(
+                f"Failed to download '{destination_blob_name}' from GCS: {e}"
+            )
 
     def check_file_exists(self, gcs_uri: str) -> bool:
         """
