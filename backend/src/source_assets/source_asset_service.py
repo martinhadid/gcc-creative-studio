@@ -19,11 +19,10 @@ import logging
 import os
 import shutil
 import uuid
-import mimetypes
 from typing import List, Optional
 
 from fastapi import Depends, HTTPException, UploadFile, status
-from PIL import Image as PILImage, ImageOps
+from PIL import Image as PILImage
 
 from src.auth.iam_signer_credentials_service import IamSignerCredentials
 from src.common.base_dto import (
@@ -59,7 +58,7 @@ class SourceAssetService:
 
     def __init__(
         self,
-        repo: SourceAssetRepository = Depends(),
+        repo: SourceAssetRepository= Depends(),
         gcs_service: GcsService = Depends(),
         iam_signer: IamSignerCredentials = Depends(),
         imagen_service: ImagenService = Depends(),
@@ -144,6 +143,14 @@ class SourceAssetService:
             )
         ]
 
+        if asset.original_gcs_uri:
+            tasks.append(
+                asyncio.to_thread(
+                    self.iam_signer.generate_presigned_url,
+                    asset.original_gcs_uri,
+                )
+            )
+
         if asset.thumbnail_gcs_uri:
             tasks.append(
                 asyncio.to_thread(
@@ -154,27 +161,43 @@ class SourceAssetService:
 
         results = await asyncio.gather(*tasks)
         presigned_url = results[0]
-        presigned_thumbnail_url = results[1] if len(results) > 1 else ""
+        presigned_original_url = ""
+        presigned_thumbnail_url = ""
+        next_index = 1
+
+        if asset.original_gcs_uri:
+            presigned_original_url = results[next_index]
+            next_index += 1
+
+        if asset.thumbnail_gcs_uri:
+            presigned_thumbnail_url = results[next_index]
 
         return SourceAssetResponseDto(
             **asset.model_dump(),
             presigned_url=presigned_url,
+            presigned_original_url=presigned_original_url,
             presigned_thumbnail_url=presigned_thumbnail_url,
         )
 
+    
     async def upload_asset(
         self,
         user: UserModel,
-        file: UploadFile,
+        file_bytes: bytes,
+        filename: str,
         workspace_id: int,
+        mime_type: str,
         scope: Optional[AssetScopeEnum] = None,
         asset_type: Optional[AssetTypeEnum] = None,
         aspect_ratio: Optional[AspectRatioEnum] = None,
+        upscale_factor: Optional[str] = None,
+        enhance_input_image: Optional[bool] = None,
+        image_preservation_factor: Optional[float] = None,
     ) -> SourceAssetResponseDto:
         """
         Handles uploading, de-duplicating, upscaling, and saving a new user asset.
         """
-        contents = await file.read()
+        contents = file_bytes
         if not contents:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Cannot upload an empty file."
@@ -192,10 +215,10 @@ class SourceAssetService:
 
         # 2. Handle file processing based on type (image vs. video vs. audio)
         is_video: bool = bool(
-            file.content_type and "video" in file.content_type
+            mime_type and "video" in mime_type
         )
         is_audio: bool = bool(
-            file.content_type and "audio" in file.content_type
+            mime_type and "audio" in mime_type
         )
         final_gcs_uri: Optional[str] = None
         thumbnail_gcs_uri: Optional[str] = None
@@ -207,7 +230,7 @@ class SourceAssetService:
             if is_video:
                 # --- Video Upload Logic ---
                 os.makedirs(temp_dir, exist_ok=True)
-                local_path = os.path.join(temp_dir, file.filename or "asset")
+                local_path = os.path.join(temp_dir, filename or "asset")
                 with open(local_path, "wb") as buffer:
                     buffer.write(contents)
 
@@ -222,7 +245,7 @@ class SourceAssetService:
                 # Upload the original video
                 final_gcs_uri = self.gcs_service.upload_file_to_gcs(
                     local_path=local_path,
-                    destination_blob_name=f"source_assets/{user.id}/{file_hash}/{file.filename}",
+                    destination_blob_name=f"source_assets/{user.id}/{file_hash}/{filename}",
                     mime_type="video/mp4",
                 )
 
@@ -240,8 +263,8 @@ class SourceAssetService:
                 final_aspect_ratio = aspect_ratio or AspectRatioEnum.RATIO_1_1
                 
                 # Determine audio mime type
-                audio_mime = file.content_type or "audio/mpeg"
-                file_extension = os.path.splitext(file.filename or "audio.mp3")[1] or ".mp3"
+                audio_mime = mime_type or "audio/mpeg"
+                file_extension = os.path.splitext(filename or "audio.mp3")[1] or ".mp3"
                 
                 # Upload the audio file directly
                 final_gcs_uri = self.gcs_service.store_to_gcs(
@@ -276,45 +299,51 @@ class SourceAssetService:
                     png_contents = contents
 
                 # If the image is already high-resolution, we skip upscaling.
-                if pil_image.width >= 2048 or pil_image.height >= 2048:
-                    final_gcs_uri = self.gcs_service.store_to_gcs(
-                        folder=f"source_assets/{user.id}/originals",
-                        file_name=f"{file_hash}.png",
-                        mime_type=MimeTypeEnum.IMAGE_PNG,
-                        contents=png_contents,
-                        decode=False,
-                    )
-                else:
-                    # --- Upscale Logic for lower-resolution images ---
-                    original_gcs_uri = self.gcs_service.store_to_gcs(
-                        folder=f"source_assets/{user.id}/originals",
-                        file_name=f"{file_hash}.png",
-                        mime_type=MimeTypeEnum.IMAGE_PNG,
-                        contents=png_contents,
-                        decode=False,
-                    )
-                    if not original_gcs_uri:
-                        raise HTTPException(
-                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Could not store the original asset.",
-                        )
+                # Validate resolution for upscaling
+                MAX_OUTPUT_PIXELS = 17 * 1024 * 1024 # ~17MP limit for Imagen 4 Upscale
 
+                current_pixels = pil_image.width * pil_image.height
+                
+                # --- Upscale Conditional Logic ---
+                if upscale_factor:
+                    factor_int = 2
+                    if upscale_factor == "x4":
+                        factor_int = 4
+                    elif upscale_factor == "x3":
+                        factor_int = 3
+
+                    projected_pixels = current_pixels * (factor_int * factor_int)
+
+                    if projected_pixels > MAX_OUTPUT_PIXELS:
+                         raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Image is too large for upscaling to {upscale_factor} times. Max output is ~17MP. Your image would result in ~{projected_pixels / 1000000:.1f}MP."
+                        )
+                
+                # --- Store Original ---
+                original_gcs_uri = self.gcs_service.store_to_gcs(
+                    folder=f"source_assets/{user.id}/originals",
+                    file_name=f"{file_hash}.png",
+                    mime_type=MimeTypeEnum.IMAGE_PNG,
+                    contents=png_contents,
+                    decode=False,
+                )
+                if not original_gcs_uri:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Could not store the original asset.",
+                    )
+
+                if upscale_factor:
                     try:
-                        # Determine the best upscale factor. If a 2x upscale is
-                        # still not high-res, use 4x for the best quality.
-                        upscale_factor = (
-                            "x4"
-                            if (pil_image.width * 2 < 2048)
-                            and (pil_image.height * 2 < 2048)
-                            else "x2"
-                        )
-
                         # Upscale the standardized PNG image.
                         upscale_dto = UpscaleImagenDto(
                             user_image=original_gcs_uri,
                             upscale_factor=upscale_factor,
                             mime_type=MimeTypeEnum.IMAGE_PNG,
-                            generation_model=GenerationModelEnum.IMAGEN_3_002,
+                            generation_model=GenerationModelEnum.IMAGEN_4_UPSCALE_PREVIEW,
+                            enhance_input_image=enhance_input_image or False,
+                            image_preservation_factor=image_preservation_factor,
                         )
                         upscaled_result = (
                             await self.imagen_service.upscale_image(upscale_dto)
@@ -331,8 +360,8 @@ class SourceAssetService:
                         else:
                             final_gcs_uri = upscaled_result.image.gcs_uri
                             logger.info(
-                                f"Upscaling complete. Final asset at {final_gcs_uri}"
-                            )
+                                    f"Upscaling complete. Final asset at {final_gcs_uri}"
+                                )
                     except Exception as e:
                         logger.error(
                             f"Failed to upscale asset for user {user.email}: {e}",
@@ -340,9 +369,15 @@ class SourceAssetService:
                         )
                         # Fallback: if upscale fails, use the original URI
                         final_gcs_uri = original_gcs_uri
+                else:
+                    # No upscale requested, use original
+                    final_gcs_uri = original_gcs_uri
 
             if not final_gcs_uri:
                 raise Exception("Failed to process and upload asset.")
+
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Asset processing failed: {e}", exc_info=True)
             raise HTTPException(
@@ -356,7 +391,7 @@ class SourceAssetService:
 
         # 4. Create and save the new UserAsset document
         # Determine mime_type based on content_type
-        content_type = file.content_type or ""
+        content_type = mime_type or ""
         if content_type.startswith("video/"):
             mime_type = MimeTypeEnum.VIDEO_MP4
         elif content_type.startswith("audio/"):
@@ -389,22 +424,38 @@ class SourceAssetService:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only administrators can set a non-private scope.",
                 )
-
-        new_asset = SourceAssetModel(
+        original_asset = SourceAssetModel(
             workspace_id=workspace_id,
             user_id=user.id,
             aspect_ratio=final_aspect_ratio,
-            gcs_uri=final_gcs_uri,
+            gcs_uri = original_gcs_uri,
             thumbnail_gcs_uri=thumbnail_gcs_uri,
-            original_filename=file.filename or "untitled",
+            original_filename=filename or "untitled",
             mime_type=mime_type,
             file_hash=file_hash,
             scope=final_scope,
             asset_type=final_asset_type,
         )
-        new_asset = await self.repo.create(new_asset)
+
+        new_asset = SourceAssetModel(
+            workspace_id=workspace_id,
+            user_id=user.id,
+            aspect_ratio=final_aspect_ratio,
+            original_gcs_uri = original_gcs_uri,
+            gcs_uri = final_gcs_uri,
+            thumbnail_gcs_uri=thumbnail_gcs_uri,
+            original_filename=filename or "untitled",
+            mime_type=mime_type,
+            file_hash=file_hash,
+            scope=final_scope,
+            asset_type=final_asset_type,
+        )
+        created_asset = await self.repo.create(original_asset)
+        new_asset.id = created_asset.id
 
         return await self._create_asset_response(new_asset)
+    
+
 
     async def convert_to_png(self, file: UploadFile) -> bytes:
         """

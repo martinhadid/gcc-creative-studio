@@ -31,6 +31,7 @@ import { ExecutionHistoryComponent } from './workflows/execution-history/executi
 import { WorkflowEditorComponent } from './workflows/workflow-editor/workflow-editor.component';
 import { WorkflowListComponent } from './workflows/workflow-list/workflow-list.component';
 import { WorkbenchComponent } from './workbench/workbench.component';
+import { UpscaleComponent } from './upscale/upscale.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -78,6 +79,7 @@ const routes: Routes = [
       { path: ':id/executions', component: ExecutionHistoryComponent },
     ],
   },
+  { path: 'imagen-upscale', component: UpscaleComponent, canActivate: [AuthGuardService] },
 ];
 
 @NgModule({
