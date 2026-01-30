@@ -195,7 +195,7 @@ export class SourceAssetService {
 
     return this.http
       .post<MediaItem>(
-        `${environment.backendURL}/images/upload_upscale`,
+        `${environment.backendURL}/images/upload-upscale`,
         formData,
       )
       .pipe(
@@ -235,7 +235,7 @@ export class SourceAssetService {
 
     return this.http
       .post<MediaItem>(
-        `${environment.backendURL}/images/upload_upscale`,
+        `${environment.backendURL}/images/upload-upscale`,
         formData,
       )
       .pipe(

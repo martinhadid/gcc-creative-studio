@@ -121,7 +121,7 @@ async def generate_images_vto(
         )
     
 
-@router.post("/upload_upscale", response_model=MediaItemResponse)
+@router.post("/upload-upscale", response_model=MediaItemResponse)
 async def upload_upscale(
     request: Request,
     file: Optional[UploadFile] = File(None),

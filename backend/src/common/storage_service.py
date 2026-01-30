@@ -224,4 +224,4 @@ class GcsService:
             logger.error(
                 f"Failed to download '{destination_blob_name}' from GCS: {e}"
             )
-        return None
+            return None

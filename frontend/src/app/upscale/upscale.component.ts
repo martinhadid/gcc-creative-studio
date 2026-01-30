@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-
 import { Component, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { Subject, combineLatest, Observable } from 'rxjs';
-import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
-// Redundant snackbar imports removed
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject, Observable } from 'rxjs';
+import { takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { ImageSelectorComponent } from '../common/components/image-selector/image-selector.component';
-import { SourceAssetService } from '../common/services/source-asset.service';
+import { SourceAssetService, SourceAssetResponseDto } from '../common/services/source-asset.service';
 import { GalleryService } from '../gallery/gallery.service';
 import { AssetTypeEnum } from '../admin/source-assets-management/source-asset.model';
 import { MediaItem, JobStatus } from '../common/models/media-item.model';
+import { handleErrorSnackbar } from '../utils/handleMessageSnackbar';
 
 interface UploadedAsset { name: string; url: string; }
 interface AssetPair { original: UploadedAsset | null; upscaled: UploadedAsset | null; }
@@ -42,24 +42,29 @@ export class UpscaleComponent implements OnInit, OnDestroy {
   readonly assetType = AssetTypeEnum.GENERIC_IMAGE;
   public readonly JobStatus = JobStatus;
 
+  // New properties for selection
+  upscaleFactor: string = '2x';
+  upscaleFactors: string[] = ['2x', '3x', '4x'];
+  
+  supportedResolution: string = '4K';
+  supportedResolutions: string[] = ['4K', '8K', '16K'];
+
+  selectedAsset: SourceAssetResponseDto | null = null;
+
   private destroy$ = new Subject<void>();
 
   // 1. Unified job stream for the full-screen overlay
-  activeUpscaleJob$: Observable<MediaItem | null> | null = null;
+  activeUpscaleJob$: Observable<MediaItem | null>;
 
   constructor(
     private dialog: MatDialog,
     private cdr: ChangeDetectorRef,
     private sourceAssetService: SourceAssetService,
-    private galleryService: GalleryService
+    private galleryService: GalleryService,
+    private _snackBar: MatSnackBar
   ) {
     // Initialize the combined job stream
-    // this.activeUpscaleJob$ = combineLatest([
-    //   this.sourceAssetService.activeUpscaleJob$,
-    //   this.galleryService.activeUpscaleJob$
-    // ]).pipe(
-    //   map(([sourceJob, galleryJob]) => sourceJob || galleryJob)
-    // );
+    this.activeUpscaleJob$ = this.sourceAssetService.activeUpscaleJob$;
   }
 
   ngOnInit(): void {
@@ -67,40 +72,45 @@ export class UpscaleComponent implements OnInit, OnDestroy {
      * 2. Subscribe to job changes to update the local component state
      * This handles the image comparison view logic.
      */
-    // this.activeUpscaleJob$
-    //   .pipe(
-    //     takeUntil(this.destroy$),
-    //     distinctUntilChanged((prev, curr) => prev?.id === curr?.id && prev?.status === curr?.status)
-    //   )
-    //   .subscribe((activeJob) => {
-    //     if (activeJob) {
-    //       // Sync local loading state
-    //       this.isLoadingUpscale = activeJob.status === JobStatus.PROCESSING;
+    this.activeUpscaleJob$
+      .pipe(
+        takeUntil(this.destroy$),
+        distinctUntilChanged((prev, curr) => prev?.id === curr?.id && prev?.status === curr?.status)
+      )
+      .subscribe((activeJob) => {
+        if (activeJob) {
+          // Sync local loading state
+          this.isLoadingUpscale = activeJob.status === JobStatus.PROCESSING;
 
-    //       if (activeJob.status === JobStatus.COMPLETED) {
-    //         // Reset error overlay for future jobs
-    //         this.showErrorOverlay = true;
-    //         // Snackbar logic moved to AppComponent
+          if (activeJob.status === JobStatus.COMPLETED) {
+            // Reset error overlay for future jobs
+            this.showErrorOverlay = true;
 
-    //         const originalUrl = (activeJob.originalPresignedUrls && activeJob.originalPresignedUrls.length > 0)
-    //           ? activeJob.originalPresignedUrls[0]
-    //           : (activeJob as any).url;
+            const originalUrl = (activeJob.originalPresignedUrls && activeJob.originalPresignedUrls.length > 0)
+              ? activeJob.originalPresignedUrls[0]
+              : (activeJob as any).url; // Fallback if needed
 
-    //         const upscaledUrl = (activeJob.presignedUrls && activeJob.presignedUrls.length > 0)
-    //           ? activeJob.presignedUrls[0]
-    //           : (activeJob as any).url;
+            const upscaledUrl = (activeJob.presignedUrls && activeJob.presignedUrls.length > 0)
+              ? activeJob.presignedUrls[0]
+              : (activeJob as any).url;
 
-    //         this.assetPair.original = { name: 'Original Image', url: originalUrl };
-    //         this.assetPair.upscaled = { name: 'Upscaled Image', url: upscaledUrl };
-    //       } else if (activeJob.status === JobStatus.FAILED) {
-    //         this.isLoadingUpscale = false;
-    //         // Snackbar logic moved to AppComponent
-    //         this.showErrorOverlay = false;
-    //       }
+            this.assetPair.original = { name: 'Original Image', url: originalUrl };
+            this.assetPair.upscaled = { name: 'Upscaled Image', url: upscaledUrl };
+            
+            // Clear selected asset as we now have the result
+            this.selectedAsset = null;
+          } else if (activeJob.status === JobStatus.FAILED) {
+            this.isLoadingUpscale = false;
+            this.showErrorOverlay = false;
+            
+            if (activeJob.errorMessage) {
+                handleErrorSnackbar(this._snackBar, { message: activeJob.errorMessage }, 'Upscale Failed');
+            }
+          }
 
-    //       this.cdr.detectChanges();
-    //     }
-    //   });
+          this.cdr.detectChanges();
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -113,6 +123,14 @@ export class UpscaleComponent implements OnInit, OnDestroy {
     this.isLoadingUpscale = false;
   }
 
+  setUpscaleFactor(factor: string): void {
+    this.upscaleFactor = factor;
+  }
+
+  setSupportedResolution(resolution: string): void {
+    this.supportedResolution = resolution;
+  }
+
   openUploaderDialog(event?: MouseEvent): void {
     if (event) event.stopPropagation();
 
@@ -123,16 +141,54 @@ export class UpscaleComponent implements OnInit, OnDestroy {
       data: {
         mimeType: 'image/*',
         assetType: this.assetType,
-        enableUpscale: true // Enable upscale UI for this specific flow
+        enableUpscale: false // Disable auto-upscale to allow preview first
       }
     });
 
     dialogRef.afterClosed().subscribe((result) => {
       if (result) {
-        console.log('Upscale initiated in background...');
-      } else if (!this.assetPair.upscaled) {
-        this.isLoadingUpscale = false;
+        // Handle the result which could be a SourceAssetResponseDto or an object wrapper
+        let asset: SourceAssetResponseDto | null = null;
+        
+        // Check if it's the object wrapper from ImageCropperDialogComponent
+        if (result.asset) {
+            asset = result.asset;
+        } else if (result.id) { 
+            // It's likely the SourceAssetResponseDto directly
+            asset = result as SourceAssetResponseDto;
+        }
+
+        if (asset) {
+            this.selectedAsset = asset;
+            this.assetPair.original = { 
+                name: asset.originalFilename, 
+                url: asset.presignedUrl || asset.gcsUri 
+            };
+            this.assetPair.upscaled = null; // Reset upscaled
+            this.cdr.detectChanges();
+        }
       }
+    });
+  }
+
+  startUpscale(): void {
+    if (!this.selectedAsset) return;
+
+    this.isLoadingUpscale = true;
+    // Use the service to start the upscale job
+    this.sourceAssetService.upscaleExistingAsset(this.selectedAsset, {
+        upscaleFactor: 'x' + this.upscaleFactor.replace('x', ''), // Ensure format "x2", "x4"
+        // Note: Resolution is not currently supported by the backend upscale endpoint directly
+    }).subscribe({
+        next: (job) => {
+            console.log('Upscale job started:', job);
+            // The subscription to activeUpscaleJob$ will handle the rest
+        },
+        error: (err) => {
+            console.error('Failed to start upscale:', err);
+            this.isLoadingUpscale = false;
+            handleErrorSnackbar(this._snackBar, err, 'Upscale Start Failed');
+        }
     });
   }
 
@@ -163,9 +219,9 @@ export class UpscaleComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     this.assetPair = { original: null, upscaled: null };
     this.isLoadingUpscale = false;
+    this.selectedAsset = null;
     // Notify services to clear status to allow new uploads
     (this.sourceAssetService as any).activeUpscaleJob.next(null);
-    (this.galleryService as any).activeUpscaleJob.next(null);
   }
 
   onDragOver(event: DragEvent): void {
