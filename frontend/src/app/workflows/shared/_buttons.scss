@@ -153,3 +153,121 @@
     height: 20px;
   }
 }
+
+// --- Size Variants ---
+
+.btn-medium {
+  height: 38px;
+  font-size: 14px;
+  
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  // When used with circle, enforce circle dimensions
+  &.btn-glass-circle {
+    width: 38px;
+  }
+}
+
+.btn-small {
+  height: 32px;
+  font-size: 13px; // Slightly smaller text
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  // When used with circle, force smaller circle
+  &.btn-glass-circle {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+.btn-large {
+  height: 56px;
+  font-size: 16px;
+
+  mat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 32px;
+  }
+
+  // When used with circle, force large circle
+  &.btn-glass-circle {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+// --- Toolbar Pattern (Glass Pill) ---
+
+.glass-toolbar {
+  @extend .btn-glass-primary; // Reuse the glass background/border logic
+  cursor: default; // It's a container, not a button itself
+  padding: 6px; // Space around inner buttons
+  gap: 12px; // Space between buttons
+  border-radius: 9999px !important;
+  
+  // Remove hover effects from the container itself if inherited
+  &:hover {
+    transform: none;
+  }
+}
+
+.glass-toolbar-btn {
+  // Reset mat-button base
+  min-width: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  // Size & Shape
+  width: 32px;
+  height: 32px;
+  border-radius: 50% !important;
+  
+  // Default Style (Dark/Unselected)
+  background-color: rgba(30, 30, 30, 0.6) !important; // Darker semi-transparent
+  color: rgba(255, 255, 255, 0.7) !important;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid transparent;
+  gap: 0 !important;
+
+  mat-icon {
+    // Ensure icon itself is centered if it has internal spacing
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+
+    // @extend .material-icons-outlined; // Removing this as it causes build error
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  &:hover {
+    background-color: rgba(60, 60, 60, 0.8) !important;
+    color: #fff !important;
+    transform: scale(1.05);
+  }
+
+  // Active/Selected State
+  &.active {
+    background-color: rgba(255, 255, 255, 0.9) !important; // Whiter/Lit up
+    color: #1f1f1f !important; // Dark text for contrast against white
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+    
+    mat-icon {
+      color: #1f1f1f !important;
+    }
+  }
+}
