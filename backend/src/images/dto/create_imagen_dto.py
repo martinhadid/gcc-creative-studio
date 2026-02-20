@@ -128,6 +128,7 @@ class CreateImagenDto(BaseDto):
             GenerationModelEnum.IMAGEN_4_ULTRA,
             GenerationModelEnum.IMAGEN_4_001,
             GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
+            GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
             GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
         ]
         if value not in valid_generation_models:
@@ -155,6 +156,7 @@ class CreateImagenDto(BaseDto):
         )
         is_gemini_flash = (
             self.generation_model == GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW
+            or self.generation_model == GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE
         )
 
         # Aspect Ratio Validation
