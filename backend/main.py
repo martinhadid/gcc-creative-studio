@@ -45,7 +45,13 @@ from src.source_assets.source_asset_controller import (
 )
 from src.users.user_controller import router as user_router
 from src.videos.veo_controller import router as video_router
+
+from src.workflows.workflow_controller import router as workflow_router
+from src.workflows_executor.workflows_executor_controller import (
+    router as workflows_executor_router,
+)
 from src.workspaces.workspace_controller import router as workspace_router
+from src.workbench.router import router as workbench_router
 
 # Get a logger instance for use in this file. It will inherit the root setup.
 logger = logging.getLogger(__name__)
@@ -117,7 +123,6 @@ async def lifespan(app: FastAPI):
     app.state.executor.shutdown(wait=True)
     # Your shutdown logic here, e.g., closing database connections
 
-
 app = FastAPI(
     lifespan=lifespan,
     title="Creative Studio API",
@@ -168,3 +173,6 @@ app.include_router(media_template_router)
 app.include_router(source_asset_router)
 app.include_router(workspace_router)
 app.include_router(brand_guideline_router)
+app.include_router(workflow_router)
+app.include_router(workflows_executor_router)
+app.include_router(workbench_router)
