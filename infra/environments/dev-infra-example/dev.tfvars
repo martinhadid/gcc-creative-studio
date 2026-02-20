@@ -24,13 +24,11 @@ be_env_vars = {
   }
   development = {
     ENVIRONMENT  = "development"
-    FIREBASE_DB = "cstudio-development"
     GOOGLE_TOKEN_AUDIENCE = "YOUR_OAUTH_WEB_CLIENT_ID_HERE"
     IDENTITY_PLATFORM_ALLOWED_ORGS = "" # If empty then any org is allowed
   }
   production = {
     ENVIRONMENT  = "production"
-    FIREBASE_DB = "cstudio-development"
     GOOGLE_TOKEN_AUDIENCE = "YOUR_OAUTH_WEB_CLIENT_ID_HERE"
     IDENTITY_PLATFORM_ALLOWED_ORGS = "" # If empty then any org is allowed
   }
@@ -72,4 +70,5 @@ apis_to_enable = [
   "aiplatform.googleapis.com",
   "firestore.googleapis.com",
   "texttospeech.googleapis.com",
+  "workflows.googleapis.com",
 ]
