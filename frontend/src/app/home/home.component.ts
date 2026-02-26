@@ -176,6 +176,30 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         disabled: false,
         icon: 'crop_16_9',
       },
+      {
+        value: '1:4',
+        viewValue: '1:4 \n Skyscraper',
+        disabled: false,
+        icon: 'crop_portrait',
+      },
+      {
+        value: '4:1',
+        viewValue: '4:1 \n Banner',
+        disabled: false,
+        icon: 'crop_16_9',
+      },
+      {
+        value: '1:8',
+        viewValue: '1:8 \n Tall Ribbon',
+        disabled: false,
+        icon: 'crop_portrait',
+      },
+      {
+        value: '8:1',
+        viewValue: '8:1 \n Wide Ribbon',
+        disabled: false,
+        icon: 'crop_16_9',
+      },
     ];
   selectedAspectRatio = this.aspectRatioOptions[0].viewValue;
   imageStyles = [

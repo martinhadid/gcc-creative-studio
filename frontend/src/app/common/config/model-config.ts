@@ -327,4 +327,8 @@ export const ASPECT_RATIO_LABELS: Record<string, string> = {
   '4:5': '4:5 (Social Portrait)',
   '5:4': '5:4 (Social Landscape)',
   '21:9': '21:9 (Cinematic)',
+  '1:4': '1:4 (Skyscraper)',
+  '4:1': '4:1 (Banner)',
+  '1:8': '1:8 (Tall Ribbon)',
+  '8:1': '8:1 (Wide Ribbon)',
 };
