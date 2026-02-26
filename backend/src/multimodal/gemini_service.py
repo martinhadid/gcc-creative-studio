@@ -232,12 +232,7 @@ class GeminiService:
         # instructions, making the behavior consistent across the application.
         is_gemini_i2i = (
             isinstance(dto, CreateImagenDto)
-            and dto.generation_model
-            in [
-                GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
-                GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
-                GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
-            ]
+            and dto.generation_model.is_gemini_image_model
             and (dto.source_asset_ids or dto.source_media_items)
         )
 
