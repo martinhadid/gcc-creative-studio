@@ -61,6 +61,7 @@ class GenerationModelEnum(str, Enum):
     GEMINI_2_5_FLASH_IMAGE = "gemini-2.5-flash-image"
     GEMINI_3_PRO_PREVIEW = "gemini-3-pro-preview"
     GEMINI_3_PRO_IMAGE_PREVIEW = "gemini-3-pro-image-preview"
+    GEMINI_3_1_FLASH_IMAGE_PREVIEW = "gemini-3.1-flash-image-preview"
     GEMINI_3_FLASH_PREVIEW = "gemini-3-flash-preview"
     VTO = "virtual-try-on-001"
 
@@ -84,6 +85,67 @@ class GenerationModelEnum(str, Enum):
     # Deprecated models (For old generations only, do not use)
     _DEPRECATED_VTO = "virtual-try-on-preview-08-04"
 
+    @property
+    def is_gemini_image_model(self) -> bool:
+        """Returns True if the model is a Gemini image generation model."""
+        return self in [
+            GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
+            GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
+            GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
+            GenerationModelEnum.GEMINI_3_1_FLASH_IMAGE_PREVIEW,
+        ]
+
+    @property
+    def valid_aspect_ratios(self) -> list["AspectRatioEnum"]:
+        """Returns the valid aspect ratios for the model."""
+        if self in [GenerationModelEnum.GEMINI_3_1_FLASH_IMAGE_PREVIEW]:
+            return [
+                AspectRatioEnum.RATIO_1_1,
+                AspectRatioEnum.RATIO_3_4,
+                AspectRatioEnum.RATIO_4_3,
+                AspectRatioEnum.RATIO_2_3,
+                AspectRatioEnum.RATIO_3_2,
+                AspectRatioEnum.RATIO_4_5,
+                AspectRatioEnum.RATIO_5_4,
+                AspectRatioEnum.RATIO_9_16,
+                AspectRatioEnum.RATIO_16_9,
+                AspectRatioEnum.RATIO_21_9,
+                AspectRatioEnum.RATIO_1_4,
+                AspectRatioEnum.RATIO_4_1,
+                AspectRatioEnum.RATIO_1_8,
+                AspectRatioEnum.RATIO_8_1,
+            ]
+        elif self.is_gemini_image_model:
+            return [
+                AspectRatioEnum.RATIO_1_1,
+                AspectRatioEnum.RATIO_3_4,
+                AspectRatioEnum.RATIO_4_3,
+                AspectRatioEnum.RATIO_2_3,
+                AspectRatioEnum.RATIO_3_2,
+                AspectRatioEnum.RATIO_4_5,
+                AspectRatioEnum.RATIO_5_4,
+                AspectRatioEnum.RATIO_9_16,
+                AspectRatioEnum.RATIO_16_9,
+                AspectRatioEnum.RATIO_21_9,
+            ]
+        else:
+            return [
+                AspectRatioEnum.RATIO_1_1,
+                AspectRatioEnum.RATIO_3_4,
+                AspectRatioEnum.RATIO_4_3,
+                AspectRatioEnum.RATIO_9_16,
+                AspectRatioEnum.RATIO_16_9,
+            ]
+
+    @property
+    def max_total_inputs(self) -> int:
+        """Returns the maximum number of total inputs allowed for the model."""
+        if self in [GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW, GenerationModelEnum.GEMINI_3_1_FLASH_IMAGE_PREVIEW]:
+            return 14
+        if self.is_gemini_image_model:
+            return 2
+        return 1
+
 
 class AspectRatioEnum(str, Enum):
     """Enum representing the supported aspect ratios."""
@@ -101,6 +163,11 @@ class AspectRatioEnum(str, Enum):
     RATIO_4_5 = "4:5"
     RATIO_5_4 = "5:4"
     RATIO_21_9 = "21:9"
+    RATIO_1_4 = "1:4"
+    RATIO_4_1 = "4:1"
+    RATIO_1_8 = "1:8"
+    RATIO_8_1 = "8:1"
+    
 
 
 class StyleEnum(str, Enum):

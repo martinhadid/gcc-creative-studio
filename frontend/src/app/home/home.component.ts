@@ -83,7 +83,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   // This object holds the current state of all user selections.
   searchRequest: ImagenRequest = {
     prompt: '',
-    generationModel: 'gemini-3-pro-image-preview',
+    generationModel: 'gemini-3.1-flash-image-preview',
     aspectRatio: '1:1',
     numberOfMedia: 4,
     style: null,
@@ -173,6 +173,30 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
       {
         value: '21:9',
         viewValue: '21:9 \n Wide',
+        disabled: false,
+        icon: 'crop_16_9',
+      },
+      {
+        value: '1:4',
+        viewValue: '1:4 \n Skyscraper',
+        disabled: false,
+        icon: 'crop_portrait',
+      },
+      {
+        value: '4:1',
+        viewValue: '4:1 \n Banner',
+        disabled: false,
+        icon: 'crop_16_9',
+      },
+      {
+        value: '1:8',
+        viewValue: '1:8 \n Tall Ribbon',
+        disabled: false,
+        icon: 'crop_portrait',
+      },
+      {
+        value: '8:1',
+        viewValue: '8:1 \n Wide Ribbon',
         disabled: false,
         icon: 'crop_16_9',
       },
@@ -780,7 +804,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   resetAllFilters() {
     this.searchRequest = {
       prompt: '',
-      generationModel: 'gemini-3-pro-image-preview',
+      generationModel: 'gemini-3.1-flash-image-preview',
       aspectRatio: '1:1',
       numberOfMedia: 4,
       style: null,
@@ -807,10 +831,10 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     const imageUrl = this.imagenDocuments.presignedUrls[index];
     const mediaItemId = this.imagenDocuments.id;
 
-    // Select Nano Banana Pro (gemini-3-pro-image-preview)
-    const nanoBananaPro = this.generationModels.find(m => m.value === 'gemini-3-pro-image-preview');
-    if (nanoBananaPro) {
-      this.selectModel(nanoBananaPro);
+    // Select Nano Banana 2 (gemini-3.1-flash-image-preview)
+    const nanoBanana2 = this.generationModels.find(m => m.value === 'gemini-3.1-flash-image-preview');
+    if (nanoBanana2) {
+      this.selectModel(nanoBanana2);
     }
 
     // Check if we reached the limit

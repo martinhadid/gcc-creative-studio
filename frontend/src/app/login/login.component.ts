@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,11 +82,13 @@ export class LoginComponent {
             error.message?.includes('timed out') ||
             error.message?.includes('Access Denied')
           ) {
-            this.handleLoginError(error.message);
+            this.handleLoginError(error);
           } else {
             this.handleLoginError(
-              error ||
-                'An unexpected error occurred during sign-in. Please try again.',
+              error || {
+                message:
+                  'An unexpected error occurred during sign-in. Please try again.',
+              },
             );
           }
           console.error('FIREBASE Login Process Error:', error);
@@ -111,11 +113,13 @@ export class LoginComponent {
             error.message?.includes('timed out') ||
             error.message?.includes('Access Denied')
           ) {
-            this.handleLoginError(error.message);
+            this.handleLoginError(error);
           } else {
             this.handleLoginError(
-              error ||
-                'An unexpected error occurred during sign-in. Please try again.',
+              error || {
+                message:
+                  'An unexpected error occurred during sign-in. Please try again.',
+              },
             );
           }
           console.error('FIREBASE Login Process Error:', error);
@@ -124,9 +128,12 @@ export class LoginComponent {
     }
   }
 
-  private handleLoginError(message: string, postErrorAction?: () => void) {
+  private handleLoginError(
+    error: any,
+    postErrorAction?: () => void,
+  ) {
     this.loader = false;
-    handleErrorSnackbar(this._snackBar, { message: message }, 'Login Error');
+    handleErrorSnackbar(this._snackBar, error, 'Login Error');
     if (postErrorAction) {
       postErrorAction();
     }
