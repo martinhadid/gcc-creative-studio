@@ -51,8 +51,21 @@ export interface GenerationModelConfig {
 export const MODEL_CONFIGS: GenerationModelConfig[] = [
   // --- Image Models ---
   {
+    value: 'gemini-3.1-flash-image-preview',
+    viewValue: 'Nano Banana 2 (Preview)',
+    type: 'IMAGE',
+    imageSrc: 'assets/images/banana-peel.png',
+    isImage: true,
+    capabilities: {
+      supportedModes: ['Text to Image', 'Ingredients to Image'],
+      maxReferenceImages: 14,
+      supportedAspectRatios: ['1:1', '16:9', '9:16', '3:4', '4:3', '2:3', '3:2', '4:5', '5:4', '21:9', '1:4', '4:1', '1:8', '8:1'], // All
+      supportsGoogleSearch: true,
+    },
+  },
+  {
     value: 'gemini-3-pro-image-preview',
-    viewValue: 'Nano Banana Pro',
+    viewValue: 'Nano Banana Pro (Preview)',
     type: 'IMAGE',
     imageSrc: 'assets/images/banana-peel.png',
     isImage: true,

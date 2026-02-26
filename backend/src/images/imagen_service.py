@@ -334,15 +334,11 @@ def _process_vto_in_background(
         )
 
 
-def gemini_flash_image_preview_generate_image(
+def gemini_generate_image(
     gcs_service: GcsService,
     vertexai_client: Client,
     prompt: str,
-    model: Literal[
-        GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
-        GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
-        GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
-    ],
+    model: GenerationModelEnum,
     bucket_name: str,
     reference_images: Optional[List[types.Image]] = None,
     aspect_ratio: Optional[str] = None,
@@ -356,6 +352,8 @@ def gemini_flash_image_preview_generate_image(
     Returns:
         A types.GeneratedImage object, or None if failed.
     """
+    if not model.is_gemini_image_model:
+        raise ValueError(f"Model {model.value} is not a Gemini image model.")
     for attempt in range(3):
         try:
             # Build the parts for the content, including the prompt and any reference images
@@ -558,19 +556,12 @@ def _process_image_in_background(
                     try:
                         # --- PATH 1: TEXT-TO-IMAGE GENERATION ---
                         if not reference_images_for_api:
-                            if (
-                                request_dto.generation_model
-                                in [
-                                    GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
-                                    GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
-                                    GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
-                                ]
-                            ):
+                            if request_dto.generation_model.is_gemini_image_model:
                                 # --- GEMINI FLASH TEXT-TO-IMAGE ---
                                 # Run async tasks in the worker's event loop
                                 tasks = [
                                     asyncio.to_thread(
-                                        gemini_flash_image_preview_generate_image,
+                                        gemini_generate_image,
                                         gcs_service=gcs_service,
                                         vertexai_client=client,
                                         prompt=request_dto.prompt,
@@ -617,18 +608,11 @@ def _process_image_in_background(
                                 )
                         # --- PATH 2: IMAGE EDITING (IMAGE-TO-IMAGE) ---
                         else:
-                            if (
-                                request_dto.generation_model
-                                in [
-                                    GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
-                                    GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
-                                    GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
-                                ]
-                            ):
+                            if request_dto.generation_model.is_gemini_image_model:
                                 # --- GEMINI FLASH IMAGE-TO-IMAGE ---
                                 tasks = [
                                     asyncio.to_thread(
-                                        gemini_flash_image_preview_generate_image,
+                                        gemini_generate_image,
                                         gcs_service=gcs_service,
                                         vertexai_client=client,
                                         model=request_dto.generation_model,
