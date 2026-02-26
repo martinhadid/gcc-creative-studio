@@ -14,15 +14,26 @@
  * limitations under the License.
  */
 
-import {TestBed} from '@angular/core/testing';
-
-import {AuthService} from './auth.service';
+import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { Router } from '@angular/router';
+import { Auth } from '@angular/fire/auth';
+import { AuthService } from './auth.service';
+import { UserService } from './user.service';
 
 describe('AuthService', () => {
   let service: AuthService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        AuthService,
+        { provide: Router, useValue: {} },
+        { provide: UserService, useValue: {} },
+        { provide: Auth, useValue: {} },
+      ],
+    });
     service = TestBed.inject(AuthService);
   });
 

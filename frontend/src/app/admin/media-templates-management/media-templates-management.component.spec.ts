@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 
-import {ComponentFixture, TestBed} from '@angular/core/testing';
-import {NoopAnimationsModule} from '@angular/platform-browser/animations';
-import {of} from 'rxjs';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { of } from 'rxjs';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatSortModule } from '@angular/material/sort';
 
-import {MediaTemplatesManagementComponent} from './media-templates-management.component';
-import {MediaTemplatesService} from './media-templates.service';
+import { MediaTemplatesManagementComponent } from './media-templates-management.component';
+import { MediaTemplatesService } from './media-templates.service';
 
 describe('MediaTemplatesManagementComponent', () => {
   let component: MediaTemplatesManagementComponent;
@@ -35,9 +41,20 @@ describe('MediaTemplatesManagementComponent', () => {
     );
 
     await TestBed.configureTestingModule({
-      imports: [MediaTemplatesManagementComponent, NoopAnimationsModule],
+      declarations: [MediaTemplatesManagementComponent],
+      imports: [
+        NoopAnimationsModule,
+        HttpClientTestingModule,
+        MatDialogModule,
+        MatSnackBarModule,
+        MatTableModule,
+        MatPaginatorModule,
+        MatSortModule,
+      ],
       providers: [
-        {provide: MediaTemplatesService, useValue: mockMediaTemplatesService},
+        { provide: MediaTemplatesService, useValue: mockMediaTemplatesService },
+        { provide: MatDialog, useValue: {} },
+        { provide: MatSnackBar, useValue: {} },
       ],
     }).compileComponents();
 

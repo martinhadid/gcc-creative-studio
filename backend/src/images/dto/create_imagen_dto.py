@@ -130,6 +130,7 @@ class CreateImagenDto(BaseDto):
             GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW,
             GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE,
             GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW,
+            GenerationModelEnum.GEMINI_3_1_FLASH_IMAGE_PREVIEW,
         ]
         if value not in valid_generation_models:
             raise ValueError("Invalid generation model for imagen.")
@@ -150,73 +151,33 @@ class CreateImagenDto(BaseDto):
             len(self.source_media_items) if self.source_media_items else 0
         )
         total_inputs = source_assets_count + generated_inputs_count
-
-        is_gemini_3_pro = (
-            self.generation_model == GenerationModelEnum.GEMINI_3_PRO_IMAGE_PREVIEW
-        )
-        
-        is_gemini_flash = (
-            self.generation_model == GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE_PREVIEW
-            or self.generation_model == GenerationModelEnum.GEMINI_2_5_FLASH_IMAGE
-        )
+        model = self.generation_model
 
         # Aspect Ratio Validation
-        allowed_ratios_gemini = [
-            AspectRatioEnum.RATIO_1_1,
-            AspectRatioEnum.RATIO_3_4,
-            AspectRatioEnum.RATIO_4_3,
-            AspectRatioEnum.RATIO_2_3,
-            AspectRatioEnum.RATIO_3_2,
-            AspectRatioEnum.RATIO_4_5,
-            AspectRatioEnum.RATIO_5_4,
-            AspectRatioEnum.RATIO_9_16,
-            AspectRatioEnum.RATIO_16_9,
-            AspectRatioEnum.RATIO_21_9,
-        ]
-        
-        if is_gemini_3_pro or is_gemini_flash:
-            if self.aspect_ratio not in allowed_ratios_gemini:
-                 raise ValueError(
-                    f"Aspect ratio {self.aspect_ratio} is not supported for Gemini models."
-                )
-        else: # Imagen models
-            allowed_ratios_imagen = [
-                AspectRatioEnum.RATIO_1_1,
-                AspectRatioEnum.RATIO_3_4,
-                AspectRatioEnum.RATIO_4_3,
-                AspectRatioEnum.RATIO_9_16,
-                AspectRatioEnum.RATIO_16_9,
-            ]
-            if self.aspect_ratio not in allowed_ratios_imagen:
-                raise ValueError(
-                    f"Aspect ratio {self.aspect_ratio} is not supported for Imagen models."
-                )
+        if self.aspect_ratio not in model.valid_aspect_ratios:
+            raise ValueError(
+                f"Aspect ratio {self.aspect_ratio} is not supported for model {model.value}."
+            )
 
         if total_inputs == 0:
             return self  # No inputs, nothing to validate here.
 
-        if is_gemini_3_pro:
-            if total_inputs > 14:
-                raise ValueError(
-                    "A maximum of 14 total inputs are allowed for Gemini 3 Pro."
-                )
-        elif is_gemini_flash:
-            if total_inputs > 2:
-                raise ValueError(
-                    "A maximum of 2 total inputs are allowed for Gemini Flash."
-                )
-        else:  # It's an Imagen model
-            if total_inputs > 1:
-                raise ValueError(
-                    "Only one total input (source asset or generated input) is allowed for image editing with Imagen models."
-                )
+        # Input Count Validation
+        max_inputs = model.max_total_inputs
+        if total_inputs > max_inputs:
+            raise ValueError(
+                f"A maximum of {max_inputs} total inputs are allowed for model {model.value}."
+            )
+
+        # Imagen-specific editing validation
+        if not model.is_gemini_image_model:
             allowed_editing_models = [
                 GenerationModelEnum.IMAGEN_3_FAST,
                 GenerationModelEnum.IMAGEN_3_002,
             ]
-            if self.generation_model not in allowed_editing_models:
+            if model not in allowed_editing_models:
                 raise ValueError(
-                    f"Model '{self.generation_model.value}' does not support image editing with Imagen. "
+                    f"Model '{model.value}' does not support image editing with Imagen. "
                     "Please use 'imagen-3.0-fast-generate-001' or 'imagen-3.0-generate-002'."
                 )
 
