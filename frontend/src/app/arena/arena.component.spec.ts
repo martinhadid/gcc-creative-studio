@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-import {ComponentFixture, TestBed} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatIconModule } from '@angular/material/icon';
 
-import {ArenaComponent} from './arena.component';
+import { ArenaComponent } from './arena.component';
 
 describe('ArenaComponent', () => {
   let component: ArenaComponent;
@@ -25,6 +26,7 @@ describe('ArenaComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ArenaComponent],
+      imports: [MatIconModule],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ArenaComponent);
